@@ -1,0 +1,47 @@
+[package]
+name = "adel"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+criterion = "0.3"
+
+[dependencies]
+vulkano = {path = "../local_resources/vulkano/vulkano"}
+vulkano-shaders = {path = "../local_resources/vulkano/vulkano-shaders"}
+vulkano-win = {path = "../local_resources/vulkano/vulkano-win"}
+#vulkano = "0.29.0"
+#vulkano-shaders = "0.29.0"
+#vulkano-win = "0.29.0"
+
+winit = "0.26.0"
+cgmath = "0.18.0"
+chrono = "0.4.19"
+more-asserts = "0.3.0"
+log = "0.4"
+simple_logger = "2.1.0"
+png = "0.17"
+bytemuck = { version = "1.7", features = ["derive", "extern_crate_std", "min_const_generics"] }
+
+[[bin]]
+name = "hello_world"
+path = "bin/hello_world.rs"
+
+[[bin]]
+name = "triangle"
+path = "bin/triangle.rs"
+
+[[bin]]
+name = "init_vulkano"
+path = "bin/init_vulkano.rs"
+
+[[bin]]
+name = "cube"
+path = "bin/cube.rs"
+
+[[bench]]
+name = "vulkano_bench"
+path = "benches/vulkano_bench.rs"
+harness = false

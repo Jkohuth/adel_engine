@@ -1,0 +1,62 @@
+TODO:
+    DONE: Set up recreating the swapchain with the new system - Solution recreate Framebuffer every frame
+    DONE: Clean up the build Warnings 
+        
+    Kicked 29-4-22: Dependent on refactoring startup into App    
+        DONE: Figure out why Vulkano takes so long to start
+            27-4-22: Started adding benchmarking of functions, I should probably dig more into benchmarking, however the issue was that it was intel CPU and not the Nvidia GPU
+            29-4-22: Dependent on reworking Application in order to create easier, less boiler plate code used
+            issue: Was using Intel and not Nvidia
+        DONE: Understand StorageImages and multi layered swapchain
+            VkImage type that is general purpose
+            Secondary Commandbuffers can be called from the primary command buffer
+        Remove loyal_display module
+
+
+    Build the Vulkano Code in the App
+        Hardcoding things would be simple but I want to store the renderer as a resource
+
+    Organize Rendering by object
+        Triangles vs Sprites Vs Textures
+        Store the verticies and render type in an object
+        Do I need to make multiple Pipelines?
+
+    Plan out an actual Game
+        Pick the different triangle
+            Render multiple triangles to the screen, read in user events to guess the correct one
+
+        Work to be done:
+            Wrap renderer in an App, make boiler plate code
+            Make Triange Component
+                Add renderer function that takes in triangle components and renders based on location, and verticies
+            Make Scene Component
+                All rendering should occur on a Secondary buffer called by the primary buffer
+                All those objects should be contained via a scene component
+            Text Renderer
+                Extract true type format render it to a quad texture, put it on screen
+            Input
+                Can be hardcoded into the Winit Loop
+                    Further abstraction can be built on it
+            
+            Scenes
+
+31-5-22
+    Work on the rendering has been steady, and I have successfully rendered a 3D cube with the proper depth buffer. I have been mulling over ways to recreate 
+    the depth buffer but I think I need to restructure how the code is organized as the Device is required. This is something I have been looking into as well as
+    getting more acquainted with Vulkano and the various changes I am making. 
+
+    I will be adding a camera system soon so that I can wander around the 3D environment.
+
+23-6-22
+    In order to share the window between multiple classes I need to supply the life time parameter to both WinitWindow and Renderer.
+    I'm putting that on the back burner for now, I want to experiment locally to determine if it's worth the effort
+
+26-6-22
+    Worked on complete storage today and leared a lot of things that don't work. Need to figure out why when I have both
+    resources and compoents the components can no longer find the value they need. 
+
+27-6-22
+    If two traits have the same function signature and a struct implements both it gets messy and will typically not use the correct one
+    What's odd is i would've expected a Compiler Warning about this trait issue.
+
+    If a struct implements multiple traits ensure that they do not share function signatures
