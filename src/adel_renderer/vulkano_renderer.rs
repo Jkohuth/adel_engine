@@ -64,7 +64,10 @@ impl VulkanoRenderer {
         }
     }
 
-    pub fn vulkano_window(&mut self) -> &mut VulkanoWindow {
+    pub fn vulkano_window(&self) -> &VulkanoWindow {
+        &self.window
+    }
+    pub fn vulkano_window_mut(&mut self) -> &mut VulkanoWindow {
         &mut self.window
     }
     pub fn vulkano_context(&self) -> &VulkanoContext {
@@ -167,7 +170,8 @@ fn create_push_constant_data(camera_projection: &Matrix4::<f32>, transform: &Tra
 }
 impl System for VulkanoRenderer {
     fn run(&mut self, world: &mut World) {
-        let projection_matrix = self.camera.get_projection() * self.camera.get_view();
+        let camera = world.get_resource::<Camera>().unwrap();
+        let projection_matrix = camera.get_projection() * camera.get_view();
         let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap(); 
         let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, PushConstantData)>::new();

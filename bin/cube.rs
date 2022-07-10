@@ -1,6 +1,7 @@
 use adel::app::Application;
 use adel::ecs::{World};
 use adel::renderer::{ModelComponent, TransformComponent, Vertex};
+use adel::input::KeyboardComponent;
 use cgmath::{Vector3, Rad};
 
 fn main() {
@@ -12,10 +13,18 @@ fn main() {
         Vector3::<f32>::new(0.5, 0.5, 0.5),
         Vector3::<Rad<f32>>::new(Rad(0.0), Rad(0.0), Rad(0.0)),
     );
+    let camera_controller_transform: TransformComponent = TransformComponent::new(
+        Vector3::<f32>::new(-1.0, 2.0, -2.0),
+        Vector3::<f32>::new(1.0, 1.0, 1.0),
+        Vector3::<Rad<f32>>::new(Rad(0.0), Rad(0.0), Rad(0.0)),
+    );
     let mut world: World = World::new();
     let cube_entity = world.new_entity();
     world.add_component_to_entity(cube_entity, model);
     world.add_component_to_entity(cube_entity, transform);
+    let camera_entity = world.new_entity();
+    world.add_component_to_entity(camera_entity, camera_controller_transform);
+    world.add_component_to_entity(camera_entity, KeyboardComponent);
     let app = Application::new(world);
     app.main_loop();
 }

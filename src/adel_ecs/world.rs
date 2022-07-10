@@ -120,7 +120,7 @@ impl World {
     pub fn insert_resource<R: 'static>(&mut self, resource: R) {
         let type_id = TypeId::of::<R>();
         let boxed_resource = Box::new(RefCell::new(resource));
-        print_type_of(&boxed_resource);
+        //print_type_of(&boxed_resource);
         //self.resources.insert(type_id, (&mut resource as *mut R).cast::<u8>());
         self.resources.insert(type_id, boxed_resource);
     }

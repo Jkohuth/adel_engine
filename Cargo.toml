@@ -34,10 +34,6 @@ name = "triangle"
 path = "bin/triangle.rs"
 
 [[bin]]
-name = "init_vulkano"
-path = "bin/init_vulkano.rs"
-
-[[bin]]
 name = "cube"
 path = "bin/cube.rs"
 
