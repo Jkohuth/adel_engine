@@ -4,6 +4,7 @@ use winit::event_loop::ControlFlow;
 use crate::adel_input::InputConsumer;
 use crate::adel_ecs::{System, World};
 use crate::adel_renderer::TransformComponent;
+use glam::{Vec3};
 use std::time::Instant;
 // This class will be a struct that contains the current input variables
 // Which keys and which state shall be contained in this class
@@ -49,5 +50,34 @@ impl System for KeyboardHandler {
     }
     fn name(&self) -> &str {
         self.name
+    }
+}
+
+static LOOK_SPEED: f32 = 3.0;
+
+fn move_in_plane_xz(keys: HashSet<VirtualKeyCode>, dt: f32, camera_transform: &mut TransformComponent) {
+
+    let mut rotate = Vec3::new(0.0, 0.0, 0.0);
+    // Look Right
+    if keys.contains(&VirtualKeyCode::Right) {
+        rotate.y += 1.0;
+    }
+    // Look Left
+    if keys.contains(&VirtualKeyCode::Left) {
+        rotate.y -= 1.0;
+    }
+    // Look Up
+    if keys.contains(&VirtualKeyCode::Up) {
+        rotate.x += 1.0;
+    }
+    // Look Down
+    if keys.contains(&VirtualKeyCode::Down) {
+        rotate.x -= 1.0;
+    }
+    if Vec3::dot(rotate, rotate) > f32::MIN {
+        // I'm about to wrestle with some data type;
+        camera_transform.rotation += LOOK_SPEED * dt * rotate.normalize();
+        //let normalized_rotation = cgmath::InnerSpace::normalize(rotate);
+        //let rad_norm_rotation = Vector3::<Rad<f32>>::new(Rad(normalized_rotation.x), Rad(normalized_rotation.y), Rad(normalized_rotation.z));
     }
 }

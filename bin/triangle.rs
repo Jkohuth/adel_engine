@@ -1,8 +1,7 @@
 use adel::ecs::World;
 use adel::app::Application;
 use adel::renderer::{Vertex2d, TriangleComponent, Transform2dComponent};
-
-use cgmath::Vector2;
+use glam::Vec2;
 
 fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
@@ -23,8 +22,8 @@ fn main() {
     world.add_component_to_entity(triangle_entity, Transform2dComponent::default());
 
     let transform: Transform2dComponent = Transform2dComponent::new(
-            Vector2::new(0.25, 0.5), // Translation
-            Vector2::new(1.5, 0.5),  // Scale
+            Vec2::new(0.25, 0.5), // Translation
+            Vec2::new(1.5, 0.5),  // Scale
             std::f32::consts::FRAC_PI_2, // Rotation
         );
     world.add_component_to_entity(triangle_entity, transform);
