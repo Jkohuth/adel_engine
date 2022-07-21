@@ -31,7 +31,7 @@ use crate::adel_renderer::{
 };
 use crate::adel_ecs::{System, World};
 
-use cgmath::{Matrix4, Rad, Vector3};
+use glam::{Mat4, Vec3};
 
 pub struct VulkanoRenderer {
     context: VulkanoContext,
@@ -64,7 +64,10 @@ impl VulkanoRenderer {
         }
     }
 
-    pub fn vulkano_window(&mut self) -> &mut VulkanoWindow {
+    pub fn vulkano_window(&self) -> &VulkanoWindow {
+        &self.window
+    }
+    pub fn vulkano_window_mut(&mut self) -> &mut VulkanoWindow {
         &mut self.window
     }
     pub fn vulkano_context(&self) -> &VulkanoContext {
@@ -159,15 +162,16 @@ fn create_push_constant_data_2d(transform: &Transform2dComponent) -> PushConstan
 }
 */
 
-fn create_push_constant_data(camera_projection: &Matrix4::<f32>, transform: &TransformComponent) -> PushConstantData {
+fn create_push_constant_data(camera_projection: Mat4, transform: &TransformComponent) -> PushConstantData {
     PushConstantData { 
-        transform: (camera_projection * transform.mat4_less_computation()).into(),
+        transform: (camera_projection * transform.mat4_less_computation()).to_cols_array_2d(),
         color: [0.0, 0.0, 0.0],
     }
 }
 impl System for VulkanoRenderer {
     fn run(&mut self, world: &mut World) {
-        let projection_matrix = self.camera.get_projection() * self.camera.get_view();
+        let camera = world.get_resource::<Camera>().unwrap();
+        let projection_matrix = camera.get_projection() * camera.get_view();
         let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap(); 
         let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, PushConstantData)>::new();
@@ -176,10 +180,10 @@ impl System for VulkanoRenderer {
             match i.1 {
                 Some(model) => {
                     if let Some(transform) = &mut transform_ref[i.0] {
-                        transform.rotation.y = &transform.rotation.y + Rad::<f32>(0.01) % Rad::<f32>(std::f32::consts::PI);
-                        transform.rotation.x = &transform.rotation.x + Rad::<f32>(0.005) % Rad::<f32>(std::f32::consts::PI);
+                        transform.rotation.y = &transform.rotation.y + 0.01 % std::f32::consts::PI;
+                        transform.rotation.x = &transform.rotation.x + 0.005 % std::f32::consts::PI;
                         data.push( (self.create_vertex_buffers(model.verticies.clone()).unwrap(), 
-                            create_push_constant_data(&projection_matrix, &transform)));
+                            create_push_constant_data(projection_matrix.clone(), &transform)));
                     } 
                 }
                 None => (),

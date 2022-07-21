@@ -1,27 +1,36 @@
 use adel::app::Application;
 use adel::ecs::{World};
 use adel::renderer::{ModelComponent, TransformComponent, Vertex};
-use cgmath::{Vector3, Rad};
+use adel::input::KeyboardComponent;
+use glam::{Vec3};
 
 fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
     // TODO: Debug why the cube is showing graphical errors
-    let model = create_cube_model(Vector3::<f32>::new(0.0, 0.0, 0.0)); 
+    let model = create_cube_model(Vec3::new(0.0, 0.0, 0.0)); 
     let transform: TransformComponent = TransformComponent::new(
-        Vector3::<f32>::new(0.0, 0.0, 2.5),
-        Vector3::<f32>::new(0.5, 0.5, 0.5),
-        Vector3::<Rad<f32>>::new(Rad(0.0), Rad(0.0), Rad(0.0)),
+        Vec3::new(0.0, 0.0, 2.5),
+        Vec3::new(0.5, 0.5, 0.5),
+        Vec3::new(0.0, 0.0, 0.0),
+    );
+    let camera_controller_transform: TransformComponent = TransformComponent::new(
+        Vec3::new(-1.0, 2.0, -2.0),
+        Vec3::new(1.0, 1.0, 1.0),
+        Vec3::new(0.0, 0.0, 0.0),
     );
     let mut world: World = World::new();
     let cube_entity = world.new_entity();
     world.add_component_to_entity(cube_entity, model);
     world.add_component_to_entity(cube_entity, transform);
+    let camera_entity = world.new_entity();
+    world.add_component_to_entity(camera_entity, camera_controller_transform);
+    world.add_component_to_entity(camera_entity, KeyboardComponent);
     let app = Application::new(world);
     app.main_loop();
 }
 
 // temporary helper function, creates a 1x1x1 cube centered at offset
-fn create_cube_model(offset: Vector3::<f32>) -> ModelComponent {
+fn create_cube_model(offset: Vec3) -> ModelComponent {
     let mut verticies = vec![
         // left face (white)
         Vertex { position: [-0.5, -0.5, -0.5], color: [0.9, 0.9, 0.9]},

@@ -50,6 +50,7 @@ pub struct World {
     entities_count: usize,
     components: Vec<Box<dyn Component>>,
     resources: HashMap<TypeId, Box<dyn Resource>>,
+    dt: f32,
 }
 
 impl World {
@@ -58,6 +59,7 @@ impl World {
             entities_count: 0,
             components: Vec::new(),
             resources: HashMap::new(),
+            dt: 0.0,
         }
     }
     pub fn new_entity(&mut self) -> usize {
@@ -120,7 +122,7 @@ impl World {
     pub fn insert_resource<R: 'static>(&mut self, resource: R) {
         let type_id = TypeId::of::<R>();
         let boxed_resource = Box::new(RefCell::new(resource));
-        print_type_of(&boxed_resource);
+        //print_type_of(&boxed_resource);
         //self.resources.insert(type_id, (&mut resource as *mut R).cast::<u8>());
         self.resources.insert(type_id, boxed_resource);
     }
@@ -144,7 +146,14 @@ impl World {
             //log::info!("Failed to Downcast Value Mut");
             return None;
         }
-    }    
+    }
+
+    pub fn update_dt(&mut self, dt: f32) {
+        self.dt = dt;
+    }
+    pub fn get_dt(&self) -> f32 {
+        self.dt
+    }
 
     /*
         Old Resource Code attempting to Use Raw pointers, led to Erros when the memory being allocated was on the stack

@@ -17,7 +17,7 @@ vulkano-win = {path = "../local_resources/vulkano/vulkano-win"}
 #vulkano-win = "0.29.0"
 
 winit = "0.26.0"
-cgmath = "0.18.0"
+glam = "0.21.2"
 chrono = "0.4.19"
 more-asserts = "0.3.0"
 log = "0.4"
@@ -32,10 +32,6 @@ path = "bin/hello_world.rs"
 [[bin]]
 name = "triangle"
 path = "bin/triangle.rs"
-
-[[bin]]
-name = "init_vulkano"
-path = "bin/init_vulkano.rs"
 
 [[bin]]
 name = "cube"
