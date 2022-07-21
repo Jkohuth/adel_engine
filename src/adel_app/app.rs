@@ -38,7 +38,9 @@ impl Application {
         // TODO: Set up Fovy with radian angle
         camera.set_perspective_projection((50.0f32).to_radians(), renderer.vulkano_window().aspect_ratio(), 0.1, 10.0);
         //camera.set_view_direction(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.1, 0.0, 1.0), None);
-        camera.set_view_target(Vec3::new(-1.0, 2.0, -2.0), Vec3::new(0.0, 0.0, 2.5), None);
+        //camera.set_view_target(Vec3::new(-1.0, 2.0, -2.0), Vec3::new(0.0, 0.0, 2.5), None);
+        camera.set_view_yxz(Vec3::new(-1.0, 2.0, -2.0),
+        Vec3::new(0.0, 0.0, 0.0));
         world.insert_resource::<InputConsumer>(input_consumer);
         world.insert_resource::<Camera>(camera);
         //log::info!("What is the value {:?}", keyboard.pressed);
@@ -58,9 +60,6 @@ impl Application {
          
         self.event_loop.run(move |event, _, control_flow| {
             //*control_flow = ControlFlow::Wait;
-            let new_time = time::Instant::now();
-            let frame_time = new_time.duration_since(current_time).as_millis();
-            current_time = new_time;
             *control_flow = ControlFlow::Poll;
             match event {
                 Event::WindowEvent {
@@ -86,14 +85,26 @@ impl Application {
                         // handle input 
                         //println!("Keyboard Input Virtual_keycode: {:?}", event);
                     }
-                } Event::RedrawEventsCleared => {
-                }
+                } 
                 Event::MainEventsCleared => {
+                    // Handle Time Step after user input
+                    let new_time = time::Instant::now();
+                    let frame_time = current_time.elapsed().as_secs_f32();//new_time.duration_since(current_time).as_secs_f32();
+                    // TODO: Properly store deltaTime in world
+                    //println!("FrameTime {}", frame_time);
+                    self.world.update_dt(frame_time);
+                    //self.world.update_dt(0.05);
+
+                    current_time = new_time;
+
                     // All events have been processed so it's time to draw,
                     // TODO: Make generic App.update, fix gametick
                     for i in &mut self.systems {
                         i.as_mut().run(&mut self.world);
                     }
+                } 
+                Event::RedrawEventsCleared => {
+                
                 }
                 _ => (),
             } 
