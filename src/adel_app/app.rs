@@ -1,5 +1,5 @@
 use crate::adel_ecs::World;
-use crate::adel_renderer::{VulkanoRenderer};
+use crate::adel_renderer::{VulkanoRenderer, ModelComponent};
 #[allow(unused_imports)]
 use crate::adel_ecs::System;
 use crate::adel_winit::WinitWindow;
@@ -26,11 +26,13 @@ pub struct Application {
 }
 
 impl Application {
+    // Application is steadily growing with all of the initialization other systems need to implement
+    // Perhaps make it a trait of systems to have an init function that can run
     pub fn new(mut world: World) -> Self {
         let mut winit_window = WinitWindow::new();
         let event_loop: EventLoop<()> = winit_window.event_loop().unwrap();
         let renderer = VulkanoRenderer::new(winit_window.window().unwrap());
-
+        renderer.create_models(&mut world.borrow_component_mut::<ModelComponent>().unwrap());
         // Create the input Consumer and keyboard handler
         let keyboard_handler = KeyboardHandler::new();
         let input_consumer = InputConsumer { pressed: HashSet::new() };
@@ -57,7 +59,7 @@ impl Application {
     pub fn main_loop(mut self) {
         use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
         let mut current_time = time::Instant::now();
-         
+
         self.event_loop.run(move |event, _, control_flow| {
             //*control_flow = ControlFlow::Wait;
             *control_flow = ControlFlow::Poll;
@@ -81,11 +83,11 @@ impl Application {
                     },
                     _ => {
                         // Need to pass the pressed variable into a keyboard class
-                        // Collect the various keyboard inputs and pass them into a class that can 
-                        // handle input 
+                        // Collect the various keyboard inputs and pass them into a class that can
+                        // handle input
                         //println!("Keyboard Input Virtual_keycode: {:?}", event);
                     }
-                } 
+                }
                 Event::MainEventsCleared => {
                     // Handle Time Step after user input
                     let new_time = time::Instant::now();
@@ -102,12 +104,12 @@ impl Application {
                     for i in &mut self.systems {
                         i.as_mut().run(&mut self.world);
                     }
-                } 
+                }
                 Event::RedrawEventsCleared => {
-                
+
                 }
                 _ => (),
-            } 
+            }
         });
     }
 }
