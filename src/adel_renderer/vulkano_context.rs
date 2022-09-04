@@ -18,7 +18,6 @@ use vulkano::{
         Instance,
         InstanceCreateInfo,
         InstanceExtensions,
-        layers_list,
         Version,
     },
     swapchain::{
@@ -27,12 +26,14 @@ use vulkano::{
         SwapchainCreateInfo,
         Swapchain,
     },
+    VulkanLibrary,
 };
 
 use winit::window::Window;
 
 use crate::adel_renderer::FinalImageView;
 
+//const VALIDATION_LAYERS: &[&str] =  &["VK_LAYER_KHRONOS_validation", "VK_LAYER_LUNARG_standard_validation"];
 const VALIDATION_LAYERS: &[&str] =  &["VK_LAYER_KHRONOS_validation"];
 const ENABLE_VALIDATION_LAYERS: bool = cfg!(debug_assertions);
 
@@ -47,17 +48,19 @@ pub struct VulkanoContext {
 
 impl VulkanoContext {
     pub fn new() -> Self {    
-        let instance = Self::create_instance();
+        let library = VulkanLibrary::new().unwrap();
+        let instance = Self::create_instance(library);
         let _debug_callback = unsafe { Self::setup_debug_callback(&instance) };
         let physical_device = PhysicalDevice::enumerate(&instance)
-            .min_by_key(|p| match p.properties().device_type {
-                PhysicalDeviceType::DiscreteGpu => 0,
-                PhysicalDeviceType::IntegratedGpu => 1,
-                PhysicalDeviceType::VirtualGpu => 2,
-                PhysicalDeviceType::Cpu => 3,
-                PhysicalDeviceType::Other => 4,
-            }).unwrap();
-
+            .min_by_key(|p| {
+                match p.properties().device_type {
+                    PhysicalDeviceType::DiscreteGpu => 0,
+                    PhysicalDeviceType::IntegratedGpu => 1,
+                    PhysicalDeviceType::VirtualGpu => 2,
+                    PhysicalDeviceType::Cpu => 3,
+                    PhysicalDeviceType::Other => 4,
+            }}).unwrap();
+        //std::process::exit(0);
         let device_name = physical_device.properties().device_name.to_string();
         let device_type = physical_device.properties().device_type;
 
@@ -74,21 +77,22 @@ impl VulkanoContext {
         }
     }
 
-    fn create_instance() -> Arc<Instance> {
-        if ENABLE_VALIDATION_LAYERS && !Self::check_debug_layers() {
-            log::warn!("Requested validation layers are unavailable")
+    fn create_instance(library: Arc<VulkanLibrary>) -> Arc<Instance> {
+        let mut layers: Vec<String> = Vec::new();
+        if ENABLE_VALIDATION_LAYERS {
+            if Self::check_debug_layers(&library) {
+                layers = VALIDATION_LAYERS.iter().map(|layer| layer.to_string()).collect::<Vec<String>>();
+            } else {
+                log::warn!("Requested validation layers are unavailable");
+            }
         }
     
-        let supported_extensions = InstanceExtensions::supported_by_core()
-            .expect("Unable to get supported instance extensions");
+        let required_extensions = Self::required_extensions(&library);
     
-        let required_extensions = Self::required_extensions();
-    
-        log::info!("Supported Extensions: {:?}", supported_extensions);
         log::info!("Required Extensions: {:?}", required_extensions);
-        let layers = vec!["VK_LAYER_KHRONOS_validation".to_owned()];
     
-        Instance::new(InstanceCreateInfo {
+        Instance::new(library, 
+            InstanceCreateInfo {
             enabled_extensions: required_extensions,
             enabled_layers: layers,
             application_name: Some("Adel Vulkano".into()),
@@ -99,8 +103,8 @@ impl VulkanoContext {
         }).expect("Unable to create Vulkan instance")
     }
     
-    fn check_debug_layers() -> bool {
-        let available_layers: Vec<String> = layers_list().unwrap()
+    fn check_debug_layers(library: &Arc<VulkanLibrary>) -> bool {
+        let available_layers: Vec<String> = library.layer_properties().unwrap()
             .map(|layer| layer.name().to_owned())
             .collect();
     
@@ -112,8 +116,8 @@ impl VulkanoContext {
         available
     }
     
-    fn required_extensions() -> InstanceExtensions {
-        let mut required_extensions = vulkano_win::required_extensions();
+    fn required_extensions(library: &Arc<VulkanLibrary>) -> InstanceExtensions {
+        let mut required_extensions = vulkano_win::required_extensions(library);
         if ENABLE_VALIDATION_LAYERS {
             required_extensions.ext_debug_utils = true;
         }
@@ -171,10 +175,14 @@ impl VulkanoContext {
             .enumerate()
             .find(|&(_i, q)| q.supports_graphics())
             .unwrap();
+        
+        if !physical.supported_extensions().is_superset_of(&Self::device_extensions()) {
+            panic!("Physical Device does not support required Extensions");
+        }
         let (device, mut queues) = Device::new(
             physical,
             DeviceCreateInfo {
-                enabled_extensions: physical.required_extensions().union(&Self::device_extensions()),
+                enabled_extensions: Self::device_extensions(),
                 queue_create_infos: vec![QueueCreateInfo::family(queue_family)],
                 ..Default::default()
             },

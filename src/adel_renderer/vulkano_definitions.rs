@@ -1,14 +1,19 @@
 use std::sync::Arc;
 use bytemuck::{Zeroable, Pod,};
 use glam::{Vec2, Vec3, Vec4, Mat2, Mat4};
+use log;
 //use cgmath::{ BaseFloat, Matrix2, Matrix4, Rad, SquareMatrix, Vector2, Vector3, Vector4 };
 
 use vulkano::{
+    buffer::CpuAccessibleBuffer,
+    device::Device,
     image::{
         swapchain::SwapchainImage, StorageImage,view::ImageView,
     },
 };
 use winit::window::Window;
+
+use crate::adel_renderer::renderer_utils;
 
 // Final render target onto which the whole app is rendered (per window)
 pub type FinalImageView = Arc<ImageView<SwapchainImage<Window>>>;
@@ -84,12 +89,12 @@ impl TransformComponent {
                 self.scale.z * (c1 * c2),                // 22
                 0.0),                                    // 23
             w_axis: Vec4::new(
-                self.translation.x,                      // 30 
+                self.translation.x,                      // 30
                 self.translation.y,                      // 31
                 self.translation.z,                      // 32
                 1.0)                                     // 33
         }
-    
+
     }
 }
 impl Default for TransformComponent {
@@ -129,7 +134,7 @@ impl Transform2dComponent {
         let cos: f32 = self.rotation.cos();
         // This may be wrong, I haven't used 2D rendering with glam
         let rot_mat = Mat2::from_cols(
-            Vec2::new(cos, -sin), // 00 10 
+            Vec2::new(cos, -sin), // 00 10
             Vec2::new(sin, cos)  // 10 11
         );
         let scale_mat = Mat2::from_cols(
@@ -162,14 +167,53 @@ impl Default for Transform2dComponent {
 }
 
 #[derive(Debug)]
+pub struct ModelBuilder {
+    // May make these Option in the future
+    verticies: Vec<Vertex>,
+    indicies: Vec<u16>,
+}
+
+impl ModelBuilder {
+    pub fn new(verticies: Vec<Vertex>, indicies: Vec<u16>) -> Self {
+        Self {
+            verticies,
+            indicies,
+        }
+    }
+    // Return a tuple of a vertex and index buffer
+    pub fn build(&self, device: &Arc<Device>) -> (Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u16]>>) {
+            (renderer_utils::create_vertex_buffers(device, self.verticies.clone()).unwrap(),
+             renderer_utils::create_index_buffers(device, self.indicies.clone()).unwrap() )
+    }
+}
+
+// May need to update to include a Staging buffer in the future
+#[derive(Debug)]
 pub struct ModelComponent {
-    pub verticies: Vec<Vertex>,
+    pub builder: ModelBuilder,
+    pub vertex_buffer: Option<Arc<CpuAccessibleBuffer<[Vertex]>>>,
+    pub index_buffer: Option<Arc<CpuAccessibleBuffer<[u16]>>>,
 }
 
 impl ModelComponent {
-    pub fn new(verticies: Vec<Vertex>) -> Self {
+    pub fn new(builder: ModelBuilder) -> Self {
         Self {
-            verticies,
+            builder,
+            vertex_buffer: None,
+            index_buffer: None,
+        }
+    }
+    pub fn build(&mut self, device: &Arc<Device>) {
+        // If Vertex_buffer exists and this was called again just pass, hmmmmmm maybe log?
+        match self.vertex_buffer {
+            None => {
+                let buffers = self.builder.build(device);
+                self.vertex_buffer = Some(buffers.0);
+                self.index_buffer = Some(buffers.1);
+            }
+            _ => {
+                log::debug!("Build called on object that already has buffer");
+            }
         }
     }
 }
