@@ -104,7 +104,12 @@ impl VulkanoRenderer {
     }
 
 
+<<<<<<< Updated upstream
     pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u16]>>, PushConstantData)>) {
+=======
+    //pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, PushConstantData)>) {
+    pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u32]>>, PushConstantData)>) {
+>>>>>>> Stashed changes
         // TODO: Very much not a fan of passing an Arc<Device> into every call of start frame
         let before_pipeline_future = match self.window.start_frame(self.context.device()) {
             Err(e) => {
@@ -138,9 +143,12 @@ impl VulkanoRenderer {
         for i in data {
             builder
                 .bind_vertex_buffers(0, i.0.clone())
+                // Draw
+                //.push_constants(self.pipeline_map.get(&PipelineType::Model).unwrap().pipeline().layout().clone(), 0, i.1.clone())
+                //.draw(i.0.len() as u32, 1, 0, 0).unwrap();
+                // Draw Indexed
                 .bind_index_buffer(i.1.clone())
                 .push_constants(self.pipeline_map.get(&PipelineType::Model).unwrap().pipeline().layout().clone(), 0, i.2.clone())
-                //.draw(i.0.len() as u32, 1, 0, 0).unwrap();
                 .draw_indexed(i.1.len() as u32, 1, 0, 0, 0).unwrap();
         }
         builder
@@ -172,7 +180,12 @@ impl System for VulkanoRenderer {
         let projection_matrix = camera.get_projection() * camera.get_view();
         let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
+<<<<<<< Updated upstream
         let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u16]>>, PushConstantData)>::new();
+=======
+        let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u32]>>, PushConstantData)>::new();
+        //let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, PushConstantData)>::new();
+>>>>>>> Stashed changes
         // Retrive a tuple, (usize, Value)
         for i in model_ref.iter_mut().enumerate() {
             match i.1 {
@@ -183,6 +196,9 @@ impl System for VulkanoRenderer {
                         data.push( (model.vertex_buffer.as_ref().unwrap().clone(), model.index_buffer.as_ref().unwrap().clone(),
                             renderer_utils::create_push_constant_data(projection_matrix.clone(), &transform))
                         );
+                        //data.push( (model.vertex_buffer.as_ref().unwrap().clone(),
+                        //    renderer_utils::create_push_constant_data(projection_matrix.clone(), &transform))
+                        //);
                     }
                 }
                 None => (),

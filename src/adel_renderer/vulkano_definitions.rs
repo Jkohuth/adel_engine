@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use bytemuck::{Zeroable, Pod,};
 use glam::{Vec2, Vec3, Vec4, Mat2, Mat4};
+use nalgebra::Vector3;
 use log;
 //use cgmath::{ BaseFloat, Matrix2, Matrix4, Rad, SquareMatrix, Vector2, Vector3, Vector4 };
 
@@ -21,11 +22,69 @@ pub type FinalImageView = Arc<ImageView<SwapchainImage<Window>>>;
 pub type DeviceImageView = Arc<ImageView<StorageImage>>;
 
 
+<<<<<<< Updated upstream
+=======
+pub struct VertexBuilder {
+    position: Option<[f32;3]>,
+    color: Option<[f32;3]>,
+    normal: Option<[f32;3]>,
+    uv: Option<[f32;2]>
+}
+impl VertexBuilder {
+    pub fn new() -> VertexBuilder {
+        Self {
+            position: None,
+            color: None,
+            normal: None,
+            uv: None,
+        }
+    }
+    pub fn position(&mut self, position: [f32; 3]) -> &mut Self {
+        self.position = Some(position);
+        self
+    }
+    pub fn color(&mut self, color: [f32; 3]) -> &mut Self {
+        self.color = Some(color);
+        self
+    }
+
+    pub fn normal(&mut self, normal: [f32; 3]) -> &mut Self {
+        self.normal = Some(normal);
+        self
+    }
+    pub fn uv(&mut self, uv: [f32; 2]) -> &mut Self {
+        self.uv = Some(uv);
+        self
+    }
+
+    pub fn build(&self) -> Vertex {
+        Vertex {
+            position: self.position.unwrap_or_default(),
+            color: self.color.unwrap_or_default(),
+            normal: self.normal.unwrap_or_default(),
+            uv: self.uv.unwrap_or_default(),
+        }
+    }
+}
+
+
+>>>>>>> Stashed changes
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, Zeroable, Pod)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, Zeroable, Pod)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub color: [f32; 3],
+<<<<<<< Updated upstream
+=======
+    pub normal: [f32; 3],
+    pub uv: [f32; 2],
+}
+
+impl Vertex {
+    pub fn new() -> VertexBuilder {
+        VertexBuilder::new()
+    }
+>>>>>>> Stashed changes
 }
 
 #[repr(C)]
@@ -166,6 +225,7 @@ impl Default for Transform2dComponent {
     }
 }
 
+<<<<<<< Updated upstream
 #[derive(Debug)]
 pub struct ModelBuilder {
     // May make these Option in the future
@@ -218,6 +278,8 @@ impl ModelComponent {
     }
 }
 
+=======
+>>>>>>> Stashed changes
 
 #[derive(Debug)]
 pub struct TriangleComponent {
