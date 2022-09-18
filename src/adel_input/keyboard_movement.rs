@@ -31,9 +31,11 @@ impl KeyboardHandler {
 }
 
 impl System for KeyboardHandler {
+    fn startup(&mut self, world: &mut World) {}
+
     fn run(&mut self, world: &mut World) {
         let input_consumer = world.get_resource::<InputConsumer>().unwrap();
-        
+
         // No input, don't spend anymore time here
         if input_consumer.pressed.is_empty() {
             return;
@@ -43,7 +45,7 @@ impl System for KeyboardHandler {
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
 
         for i in input_ref.iter().enumerate() {
-            // _input_entity is used to track that this entity at this position in the Component Array exists 
+            // _input_entity is used to track that this entity at this position in the Component Array exists
             if let Some(_input_entity) = i.1 {
                 if let Some(camera_transform) = &mut transform_ref[i.0] {
                     //log::info!("Inside the move script camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
@@ -51,7 +53,6 @@ impl System for KeyboardHandler {
                     //log::info!("Post move camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
                     let mut camera = world.get_resource_mut::<Camera>().unwrap();
                     camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
-
 
                 }
             }
@@ -112,15 +113,15 @@ fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &
     if keys.contains(&VirtualKeyCode::D) {
         move_dir += right_dir;
     }
-    // Move Left 
+    // Move Left
     if keys.contains(&VirtualKeyCode::A) {
         move_dir -= right_dir;
     }
-    // Move Up 
+    // Move Up
     if keys.contains(&VirtualKeyCode::E) {
         move_dir += up_dir;
     }
-    // Move Down 
+    // Move Down
     if keys.contains(&VirtualKeyCode::Q) {
         move_dir -= up_dir;
     }

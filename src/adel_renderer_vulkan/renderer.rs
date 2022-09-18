@@ -32,12 +32,12 @@ impl VulkanApp {
             .expect("Failed: Create window");
 
         // init vulkan stuff
-        let entry = unsafe { ash::Entry::load().expect("Error: Failed to create Ash Entry"); };
-        let instance = create_instance(entry, ENABLE_VALIDATION_LAYERS, &VALIDATION_LAYERS.to_vec());
+        let entry = unsafe { ash::Entry::load().expect("Error: Failed to create Ash Entry") };
+        let instance = create_instance(&entry, ENABLE_VALIDATION_LAYERS, &VALIDATION_LAYERS.to_vec());
         let surface_info = create_surface(&entry, &instance, &window);
         let (debug_utils_loader, debug_messenger) = setup_debug_utils(ENABLE_VALIDATION_LAYERS, &entry, &instance);
         Self {
-            entry,
+            _entry: entry,
             instance,
             surface_loader: surface_info.surface_loader,
             surface: surface_info.surface,
@@ -109,7 +109,7 @@ pub fn create_instance(
 
     let instance: ash::Instance = unsafe {
         entry
-            .create_instance(create_info, None)
+            .create_instance(&create_info, None)
             .expect("Error: Failed to create Instance")
     };
 
@@ -122,15 +122,15 @@ pub fn create_surface(
 
 ) -> SurfaceInfo {
     let surface = unsafe {
-        platforms::create_surface(entry, instance, window).expect("Error: Failed to create Surface");
+        platforms::create_surface(entry, instance, window).expect("Error: Failed to create Surface")
     };
 
     let surface_loader = ash::extensions::khr::Surface::new(entry, instance);
     SurfaceInfo {
         surface_loader,
         surface,
-        screen_width: window.inner_size().width(),
-        screen_height: window.inner_size().height(),
+        screen_width: window.inner_size().width,
+        screen_height: window.inner_size().height,
 
     }
 }
@@ -142,27 +142,41 @@ pub fn pick_physical_device(
     let physical_device = unsafe {
         instance
             .enumerate_physical_devices()
-            .expect("Error: Failed to enumerate Physical Devices");
+            .expect("Error: Failed to enumerate Physical Devices")
     };
 
-    let result = physical_device.iter().find(|physical_device| {
+    let result = physical_device.iter().filter(|physical_device| {
         let is_suitable = is_physical_device_suitable(
             instance,
-            physical_device,
+            **physical_device,
             surface_info
         );
 
-        if is_suitable {
-            let device_properties = instance.get_physical_device_properties(physical_device);
-            let device_name = vk_to_string(&device_properties.device_name);
-            println!("Using GPU: {}", device_name);
-        }
-
         is_suitable
+    }).min_by_key(|physical_device| {
+        let device_properties = unsafe { instance.get_physical_device_properties(**physical_device) };
+        let device_name = vk_to_string(&device_properties.device_name);
+        log::info!("Suitable GPU Found: {}", device_name);
+
+        match device_properties.device_type {
+            vk::PhysicalDeviceType::DISCRETE_GPU => 0,
+            vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+            vk::PhysicalDeviceType::VIRTUAL_GPU => 2,
+            vk::PhysicalDeviceType::CPU => 3,
+            vk::PhysicalDeviceType::OTHER => 4,
+            _ => panic!("ERROR: Undefined behavior for device_type"),
+        }
     });
 
+
     match result {
-        Some(p_physical_device) => *p_physical_device,
+        Some(p_physical_device) => {
+            // TODO: Remove these extra calls
+            let device_properties = unsafe { instance.get_physical_device_properties(*p_physical_device) };
+            let device_name = vk_to_string(&device_properties.device_name);
+            log::info!("Using GPU: {}", device_name);
+            return *p_physical_device;
+        },
         None => panic!("Error: Failed to find a suitable GPU!"),
     }
 }
@@ -173,8 +187,27 @@ pub fn is_physical_device_suitable(
     surface_info: &SurfaceInfo,
 ) -> bool {
     let device_features = unsafe { instance.get_physical_device_features(physical_device) };
-    true
+    let indices = find_queue_family(instance, physical_device, surface_info);
+
+    let is_queue_family_supported = indices.is_complete();
+    let is_device_extension_supported =
+        check_device_extension_support(instance, physical_device);
+    let is_swapchain_supported = if is_device_extension_supported {
+        let swapchain_support = query_swapchain_support(physical_device, surface_info);
+        !swapchain_support.formats.is_empty() && !swapchain_support.present_modes.is_empty()
+    } else {
+        false
+    };
+
+    let is_support_sampler_anisotropy = device_features.sampler_anisotropy == 1;
+
+    return is_queue_family_supported
+        && is_device_extension_supported
+        && is_swapchain_supported
+        && is_support_sampler_anisotropy;
+
 }
+
 pub fn find_queue_family(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
@@ -199,7 +232,7 @@ pub fn find_queue_family(
                 physical_device,
                 index as u32,
                 surface_info.surface,
-            )
+            ).expect("ERROR: Failed to load surface device support")
         };
 
         if queue_family.queue_count > 0 && is_present_support {
@@ -216,6 +249,62 @@ pub fn find_queue_family(
     queue_family_indices
 }
 
+pub fn check_device_extension_support(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+) -> bool {
+    let available_extensions = unsafe {
+        instance.
+            enumerate_device_extension_properties(physical_device)
+            .expect("ERROR: Failed to get device extension properties")
+    };
+
+    let mut available_extension_names = vec![];
+
+    for extension in available_extensions.iter() {
+        let extension_name = vk_to_string(&extension.extension_name);
+        available_extension_names.push(extension_name);
+    }
+
+    use std::collections::HashSet;
+    let mut required_extensions = HashSet::new();
+    for extension in DEVICE_EXTENSIONS {
+        required_extensions.insert(extension.to_string());
+    }
+
+    for extension_name in available_extension_names.iter() {
+        required_extensions.remove(extension_name);
+    }
+
+    return required_extensions.is_empty();
+
+}
+
+pub fn query_swapchain_support(
+    physical_device: vk::PhysicalDevice,
+    surface_stuff: &SurfaceInfo,
+) -> SwapChainSupportDetail {
+    unsafe {
+        let capabilities = surface_stuff
+            .surface_loader
+            .get_physical_device_surface_capabilities(physical_device, surface_stuff.surface)
+            .expect("Failed to query for surface capabilities.");
+        let formats = surface_stuff
+            .surface_loader
+            .get_physical_device_surface_formats(physical_device, surface_stuff.surface)
+            .expect("Failed to query for surface formats.");
+        let present_modes = surface_stuff
+            .surface_loader
+            .get_physical_device_surface_present_modes(physical_device, surface_stuff.surface)
+            .expect("Failed to query for surface present mode.");
+
+        SwapChainSupportDetail {
+            capabilities,
+            formats,
+            present_modes,
+        }
+    }
+}
 
 pub fn check_validation_layer_support(
     entry: &ash::Entry,

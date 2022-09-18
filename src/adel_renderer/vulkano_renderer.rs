@@ -89,6 +89,7 @@ impl VulkanoRenderer {
     pub fn vulkano_pipeline_map(&self) -> &HashMap<PipelineType, VulkanoPipeline> {
         &self.pipeline_map
     }
+    /*
     // Requires the model builder components from World and returns a RefCell enclosed Vector where entity value
     // equates to it's position in the vector and if an entity has some value it's
     pub fn create_models(&self, model_builder_vec: &mut RefMut<Vec<Option<ModelComponent>>>) {
@@ -102,14 +103,10 @@ impl VulkanoRenderer {
             }
         }
     }
+    */
 
-
-<<<<<<< Updated upstream
-    pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u16]>>, PushConstantData)>) {
-=======
     //pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, PushConstantData)>) {
     pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u32]>>, PushConstantData)>) {
->>>>>>> Stashed changes
         // TODO: Very much not a fan of passing an Arc<Device> into every call of start frame
         let before_pipeline_future = match self.window.start_frame(self.context.device()) {
             Err(e) => {
@@ -172,6 +169,27 @@ impl VulkanoRenderer {
 }
 
 impl System for VulkanoRenderer {
+        fn startup(&mut self, world: &mut World) {
+        let mut model_component_vec: Vec<Option<ModelComponent>> = Vec::new();
+        // Since I can't borrow World both immutable and mutably, I first borrow it immutably,
+        // Use that data to build a new component vector, then when that lifetime has ended
+        // I push it into world mutably
+        {
+            let builders = world.borrow_component::<ModelBuilder>().unwrap();
+            for model_builder in builders.iter().enumerate() {
+                match model_builder.1 {
+                    Some(builder) => {
+                        model_component_vec.push(Some(builder.build(self.context.device())));
+                    }
+                    None => {
+
+                    }
+                }
+
+            }
+        }
+        world.insert_component(model_component_vec);
+    }
     fn run(&mut self, world: &mut World) {
 
         // Need to build the models into Model Components
@@ -180,12 +198,8 @@ impl System for VulkanoRenderer {
         let projection_matrix = camera.get_projection() * camera.get_view();
         let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
-<<<<<<< Updated upstream
-        let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u16]>>, PushConstantData)>::new();
-=======
         let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u32]>>, PushConstantData)>::new();
         //let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, PushConstantData)>::new();
->>>>>>> Stashed changes
         // Retrive a tuple, (usize, Value)
         for i in model_ref.iter_mut().enumerate() {
             match i.1 {

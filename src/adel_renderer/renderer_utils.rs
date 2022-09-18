@@ -30,7 +30,7 @@ pub fn create_vertex_buffers_2d(device: &Arc<Device>, verticies: Vec<Vertex2d>) 
             verticies)
 }
 
-pub fn create_index_buffers(device: &Arc<Device>, indicies: Vec<u16>) -> Result<Arc<CpuAccessibleBuffer<[u16]>>, DeviceMemoryAllocationError> {
+pub fn create_index_buffers(device: &Arc<Device>, indicies: Vec<u32>) -> Result<Arc<CpuAccessibleBuffer<[u32]>>, DeviceMemoryAllocationError> {
         CpuAccessibleBuffer::from_iter(
             device.clone(),
             BufferUsage::all(),

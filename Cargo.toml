@@ -23,11 +23,8 @@ log = "0.4"
 simple_logger = "2.1.0"
 png = "0.17"
 bytemuck = { version = "1.7", features = ["derive", "extern_crate_std", "min_const_generics"] }
-<<<<<<< Updated upstream
-=======
 tobj = "3.2.3"
 nalgebra = "0.31.0"
->>>>>>> Stashed changes
 
 [[bin]]
 name = "hello_world"

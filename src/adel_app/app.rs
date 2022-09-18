@@ -32,7 +32,6 @@ impl Application {
         let mut winit_window = WinitWindow::new();
         let event_loop: EventLoop<()> = winit_window.event_loop().unwrap();
         let renderer = VulkanoRenderer::new(winit_window.window().unwrap());
-        renderer.create_models(&mut world.borrow_component_mut::<ModelComponent>().unwrap());
         // Create the input Consumer and keyboard handler
         let keyboard_handler = KeyboardHandler::new();
         let input_consumer = InputConsumer { pressed: HashSet::new() };
@@ -59,7 +58,12 @@ impl Application {
     pub fn main_loop(mut self) {
         use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
         let mut current_time = time::Instant::now();
-
+        // Initialize everything that needs to at startup
+        {
+            for i in &mut self.systems {
+                i.as_mut().startup(&mut self.world);
+            }
+        }
         self.event_loop.run(move |event, _, control_flow| {
             //*control_flow = ControlFlow::Wait;
             *control_flow = ControlFlow::Poll;
