@@ -1,13 +1,14 @@
 use std::collections::HashSet;
-use std::cell::Ref;
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
-use winit::event_loop::ControlFlow;
+#[allow(unused_imports)]
+use winit::{
+        event::{ElementState, KeyboardInput, VirtualKeyCode},
+        event_loop::ControlFlow,
+};
 use crate::adel_input::InputConsumer;
 use crate::adel_ecs::{System, World};
 use crate::adel_renderer::TransformComponent;
 use glam::{Vec3};
 use crate::adel_camera::Camera;
-use std::time::Instant;
 // This class will be a struct that contains the current input variables
 // Which keys and which state shall be contained in this class
 // Other Classes need to reference this class in order to update accordingly
@@ -31,7 +32,7 @@ impl KeyboardHandler {
 }
 
 impl System for KeyboardHandler {
-    fn startup(&mut self, world: &mut World) {}
+    fn startup(&mut self, _world: &mut World) {}
 
     fn run(&mut self, world: &mut World) {
         let input_consumer = world.get_resource::<InputConsumer>().unwrap();

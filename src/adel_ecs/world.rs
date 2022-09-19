@@ -3,7 +3,6 @@ use std::any::TypeId;
 
 #[allow(unused_imports)]
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 pub trait Component {
     fn component_as_any(&self) -> &dyn std::any::Any;

@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::collections::HashMap;
 
 use vulkano::{
     buffer::CpuAccessibleBuffer,
@@ -21,7 +20,7 @@ pub struct ModelBuilder {
 
 impl ModelBuilder {
     pub fn load_model(filepath: &str) -> ModelBuilder {
-        let (models, materials) =
+        let (models, _materials) =
             tobj::load_obj(
                 &filepath,
                 &tobj::LoadOptions::default()
@@ -29,8 +28,8 @@ impl ModelBuilder {
             .expect("Failed to OBJ load file");
 //        assert!(models[0].is_ok());
         //let mut unique_vertices = HashMap::new();
-        let mut vertices: Vec<Vertex> = Vec::new();
-        let mut indices: Vec<u32> = Vec::new();
+        let _vertices: Vec<Vertex> = Vec::new();
+        let _indices: Vec<u32> = Vec::new();
         for model in &models {
             for index in 0..&model.mesh.indices.len() /3 {
                 let pos_offset = (3 * index) as usize;
@@ -64,11 +63,11 @@ impl ModelBuilder {
                 }*/
             }
         }
-        log::info!("Vertex Count: {}", vertices.len());
+        log::info!("Vertex Count: {}", _vertices.len());
 
         Self {
-            vertices,
-            indices
+            vertices: _vertices,
+            indices: _indices
         }
     }
     pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>) -> Self {
@@ -111,7 +110,7 @@ impl ModelComponent {
         ModelBuilder::new(verticies, indicies)
     }
 }
-
+#[allow(dead_code)]
 fn print_vertex(models: &tobj::Model) {
     let mesh = &models.mesh;
     println!("Indicies: {:?}", mesh.indices);

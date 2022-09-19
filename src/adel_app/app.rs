@@ -1,5 +1,5 @@
 use crate::adel_ecs::World;
-use crate::adel_renderer::{VulkanoRenderer, ModelComponent};
+use crate::adel_renderer::{VulkanoRenderer};
 #[allow(unused_imports)]
 use crate::adel_ecs::System;
 use crate::adel_winit::WinitWindow;
@@ -8,8 +8,8 @@ use crate::adel_input::{ KeyboardHandler, InputConsumer };
 use glam::{Vec3};
 use std::collections::HashSet;
 use std::time;
+#[allow(unused_imports)]
 use log;
-use std::cell::RefCell;
 
 use winit::{
     event::{
@@ -56,6 +56,7 @@ impl Application {
     }
 
     pub fn main_loop(mut self) {
+        #[allow(unused_imports)]
         use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
         let mut current_time = time::Instant::now();
         // Initialize everything that needs to at startup

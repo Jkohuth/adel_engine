@@ -1,20 +1,17 @@
 use std::sync::Arc;
 use bytemuck::{Zeroable, Pod,};
 use glam::{Vec2, Vec3, Vec4, Mat2, Mat4};
-use nalgebra::Vector3;
+#[allow(unused_imports)]
 use log;
 //use cgmath::{ BaseFloat, Matrix2, Matrix4, Rad, SquareMatrix, Vector2, Vector3, Vector4 };
 
 use vulkano::{
-    buffer::CpuAccessibleBuffer,
-    device::Device,
     image::{
         swapchain::SwapchainImage, StorageImage,view::ImageView,
     },
 };
 use winit::window::Window;
 
-use crate::adel_renderer::renderer_utils;
 
 // Final render target onto which the whole app is rendered (per window)
 pub type FinalImageView = Arc<ImageView<SwapchainImage<Window>>>;

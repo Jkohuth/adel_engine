@@ -1,6 +1,7 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
+#[allow(unused_imports)]
 use std::cell::{Ref, RefCell, RefMut};
 use log;
 #[allow(unused_imports)]
@@ -18,8 +19,9 @@ use winit::window::Window;
 
 use crate::adel_camera::Camera;
 
-use crate::adel_renderer::{renderer_utils, FinalImageView};
+use crate::adel_renderer::{renderer_utils};
 
+#[allow(unused_imports)]
 use crate::adel_renderer::{
     VulkanoContext,
     VulkanoWindow,

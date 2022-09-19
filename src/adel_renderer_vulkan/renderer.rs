@@ -1,17 +1,19 @@
 
 use ash::vk;
-use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
-use winit::event_loop::{EventLoop, ControlFlow};
+//use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
+//use winit::event_loop::{EventLoop, ControlFlow};
 
 use log;
-use std::ffi::{CString, CStr};
-use std::os::raw::{c_char, c_void};
-use std::ptr;
+use std::ffi::{CString};
 
-use crate::adel_renderer_vulkan::platforms;
-use crate::adel_renderer_vulkan::utility;
-use crate::adel_renderer_vulkan::structures::*;
-use crate::adel_renderer_vulkan::constants::*;
+// TODO: Create a prelude and add these to it
+use crate::adel_renderer_vulkan::utility::{
+    constants::*,
+    debug,
+    platforms,
+    structures,
+    tools,
+};
 
 pub struct VulkanApp {
     // vulkan stuff
@@ -21,6 +23,8 @@ pub struct VulkanApp {
     surface: vk::SurfaceKHR,
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
+
+    _physical_device: vk::PhysicalDevice,
     window: winit::window::Window,
 }
 
@@ -35,7 +39,7 @@ impl VulkanApp {
         // init vulkan stuff
         let entry = unsafe { ash::Entry::load().expect("Error: Failed to create Ash Entry") };
         let instance = create_instance(&entry, ENABLE_VALIDATION_LAYERS, &VALIDATION_LAYERS.to_vec());
-        let (debug_utils_loader, debug_messenger) = setup_debug_utils(ENABLE_VALIDATION_LAYERS, &entry, &instance);
+        let (debug_utils_loader, debug_messenger) = debug::setup_debug_utils(ENABLE_VALIDATION_LAYERS, &entry, &instance);
         let surface_info = create_surface(&entry, &instance, &window);
         let physical_device = pick_physical_device(&instance, &surface_info);
         Self {
@@ -45,6 +49,7 @@ impl VulkanApp {
             surface: surface_info.surface,
             debug_utils_loader,
             debug_messenger,
+            _physical_device: physical_device,
             window,
         }
 
@@ -69,9 +74,9 @@ pub fn create_instance(
         .engine_name(&engine_name)
         .api_version(APPLICATION_VERSION).build();
 
-    let mut debug_utils_create_info = populate_debug_messenger_create_info();
+    let mut debug_utils_create_info = debug::populate_debug_messenger_create_info();
 
-    let mut extension_names = platforms::required_extension_names();
+    let extension_names = platforms::required_extension_names();
 
     let requred_validation_layer_raw_names: Vec<CString> = required_validation_layers
         .iter()
@@ -109,13 +114,13 @@ pub fn create_surface(
     instance: &ash::Instance,
     window: &winit::window::Window,
 
-) -> SurfaceInfo {
+) -> structures::SurfaceInfo {
     let surface = unsafe {
         platforms::create_surface(entry, instance, window).expect("Error: Failed to create Surface")
     };
 
     let surface_loader = ash::extensions::khr::Surface::new(entry, instance);
-    SurfaceInfo {
+    structures::SurfaceInfo {
         surface_loader,
         surface,
         screen_width: window.inner_size().width,
@@ -126,7 +131,7 @@ pub fn create_surface(
 
 pub fn pick_physical_device(
     instance: &ash::Instance,
-    surface_info: &SurfaceInfo,
+    surface_info: &structures::SurfaceInfo,
 ) -> vk::PhysicalDevice {
     let physical_device = unsafe {
         instance
@@ -143,7 +148,7 @@ pub fn pick_physical_device(
         is_suitable
     }).min_by_key(|physical_device| {
         let device_properties = unsafe { instance.get_physical_device_properties(**physical_device) };
-        let device_name = vk_to_string(&device_properties.device_name);
+        let device_name = tools::vk_to_string(&device_properties.device_name);
         log::info!("Suitable GPU Found: {}", device_name);
 
         match device_properties.device_type {
@@ -161,7 +166,7 @@ pub fn pick_physical_device(
         Some(p_physical_device) => {
             // TODO: Remove these extra calls
             let device_properties = unsafe { instance.get_physical_device_properties(*p_physical_device) };
-            let device_name = vk_to_string(&device_properties.device_name);
+            let device_name = tools::vk_to_string(&device_properties.device_name);
             log::info!("Using GPU: {}", device_name);
             return *p_physical_device;
         },
@@ -172,7 +177,7 @@ pub fn pick_physical_device(
 pub fn is_physical_device_suitable(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
-    surface_info: &SurfaceInfo,
+    surface_info: &structures::SurfaceInfo,
 ) -> bool {
     let device_features = unsafe { instance.get_physical_device_features(physical_device) };
     let indices = find_queue_family(instance, physical_device, surface_info);
@@ -200,13 +205,13 @@ pub fn is_physical_device_suitable(
 pub fn find_queue_family(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
-    surface_info: &SurfaceInfo,
-)-> QueueFamilyIndices {
+    surface_info: &structures::SurfaceInfo,
+)-> structures::QueueFamilyIndices {
     let queue_families = unsafe {
         instance.get_physical_device_queue_family_properties(physical_device)
     };
 
-    let mut queue_family_indices = QueueFamilyIndices::new();
+    let mut queue_family_indices = structures::QueueFamilyIndices::new();
 
     let mut index = 0;
     for queue_family in queue_families.iter() {
@@ -250,7 +255,7 @@ pub fn check_device_extension_support(
     let mut available_extension_names = vec![];
 
     for extension in available_extensions.iter() {
-        let extension_name = vk_to_string(&extension.extension_name);
+        let extension_name = tools::vk_to_string(&extension.extension_name);
         available_extension_names.push(extension_name);
     }
 
@@ -269,8 +274,8 @@ pub fn check_device_extension_support(
 
 pub fn query_swapchain_support(
     physical_device: vk::PhysicalDevice,
-    surface_info: &SurfaceInfo,
-) -> SwapChainSupportDetail {
+    surface_info: &structures::SurfaceInfo,
+) -> structures::SwapChainSupportDetail {
     unsafe {
         let capabilities = surface_info
             .surface_loader
@@ -285,7 +290,7 @@ pub fn query_swapchain_support(
             .get_physical_device_surface_present_modes(physical_device, surface_info.surface)
             .expect("Failed to query for surface present mode.");
 
-        SwapChainSupportDetail {
+        structures::SwapChainSupportDetail {
             capabilities,
             formats,
             present_modes,
@@ -310,7 +315,7 @@ pub fn check_validation_layer_support(
         let mut is_layer_found = false;
 
         for layer_property in layer_properties.iter() {
-            let test_layer_name = vk_to_string(&layer_property.layer_name);
+            let test_layer_name = tools::vk_to_string(&layer_property.layer_name);
             if (*required_layer_name) == test_layer_name {
                 is_layer_found = true;
                 break;
@@ -326,84 +331,3 @@ pub fn check_validation_layer_support(
     true
 }
 
-pub fn vk_to_string(raw_string_array: &[c_char]) -> String {
-    let raw_string = unsafe {
-        let pointer = raw_string_array.as_ptr();
-        CStr::from_ptr(pointer)
-    };
-
-    raw_string
-        .to_str()
-        .expect("Failed to convert vulkan raw string.")
-        .to_owned()
-}
-pub fn setup_debug_utils(
-    is_enable_debug: bool,
-    entry: &ash::Entry,
-    instance: &ash::Instance,
-) -> (ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT) {
-    let debug_utils_loader = ash::extensions::ext::DebugUtils::new(entry, instance);
-
-    if is_enable_debug == false {
-        (debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null())
-    } else {
-        let messenger_ci = populate_debug_messenger_create_info();
-
-        let utils_messenger = unsafe {
-            debug_utils_loader
-                .create_debug_utils_messenger(&messenger_ci, None)
-                .expect("Debug Utils Callback")
-        };
-
-        (debug_utils_loader, utils_messenger)
-    }
-}
-
-unsafe extern "system" fn vulkan_debug_utils_callback(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    _p_user_data: *mut c_void,
-) -> vk::Bool32 {
-    let types = match message_type {
-        vk::DebugUtilsMessageTypeFlagsEXT::GENERAL => "[General]",
-        vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE => "[Performance]",
-        vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION => "[Validation]",
-        _ => "[Unknown]",
-    };
-    let message = CStr::from_ptr((*p_callback_data).p_message);
-    match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => {
-            log::error!("Vulkan Debug Callback: Type: {}, Msg: {:?}", types, message);
-        }
-        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => {
-            log::warn!("Vulkan Debug Callback: Type: {}, {:?}", types, message);
-        }
-        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => {
-            log::info!("Vulkan Debug Callback: Type: {} {:?}", types, message);
-        }
-        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => {
-            log::debug!("Vulkan Debug Callback: Type: {}, {:?}", types, message);
-        }
-        _ => {
-            log::debug!("[UNKNOWN] Vulkan Debug Callback: Type: {}, {:?}", types, message);
-        }
-    }
-    vk::FALSE
-}
-pub fn populate_debug_messenger_create_info() -> vk::DebugUtilsMessengerCreateInfoEXT {
-    vk::DebugUtilsMessengerCreateInfoEXT {
-        s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-        p_next: ptr::null(),
-        flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
-        message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::WARNING |
-            // vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE |
-            // vk::DebugUtilsMessageSeverityFlagsEXT::INFO |
-            vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
-        message_type: vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
-            | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
-            | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION,
-        pfn_user_callback: Some(vulkan_debug_utils_callback),
-        p_user_data: ptr::null_mut(),
-    }
-}
