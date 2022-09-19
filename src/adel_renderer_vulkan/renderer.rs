@@ -13,7 +13,7 @@ use crate::adel_renderer_vulkan::utility;
 use crate::adel_renderer_vulkan::structures::*;
 use crate::adel_renderer_vulkan::constants::*;
 
-struct VulkanApp {
+pub struct VulkanApp {
     // vulkan stuff
     _entry: ash::Entry,
     instance: ash::Instance,
@@ -21,6 +21,7 @@ struct VulkanApp {
     surface: vk::SurfaceKHR,
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
+    window: winit::window::Window,
 }
 
 impl VulkanApp {
@@ -34,8 +35,9 @@ impl VulkanApp {
         // init vulkan stuff
         let entry = unsafe { ash::Entry::load().expect("Error: Failed to create Ash Entry") };
         let instance = create_instance(&entry, ENABLE_VALIDATION_LAYERS, &VALIDATION_LAYERS.to_vec());
-        let surface_info = create_surface(&entry, &instance, &window);
         let (debug_utils_loader, debug_messenger) = setup_debug_utils(ENABLE_VALIDATION_LAYERS, &entry, &instance);
+        let surface_info = create_surface(&entry, &instance, &window);
+        let physical_device = pick_physical_device(&instance, &surface_info);
         Self {
             _entry: entry,
             instance,
@@ -43,6 +45,7 @@ impl VulkanApp {
             surface: surface_info.surface,
             debug_utils_loader,
             debug_messenger,
+            window,
         }
 
     }
@@ -60,19 +63,15 @@ pub fn create_instance(
 
     let app_name = CString::new(WINDOW_TITLE).unwrap();
     let engine_name = CString::new("Adel Engine").unwrap();
-    let app_info = vk::ApplicationInfo {
-        p_application_name: app_name.as_ptr(),
-        s_type: vk::StructureType::APPLICATION_INFO,
-        p_next: ptr::null(),
-        p_engine_name: engine_name.as_ptr(),
-        application_version: APPLICATION_VERSION,
-        engine_version: ENGINE_VERSION,
-        api_version: API_VERSION,
-    };
+    let app_info = vk::ApplicationInfo::builder()
+        .application_name(&app_name)
+        .application_version(APPLICATION_VERSION)
+        .engine_name(&engine_name)
+        .api_version(APPLICATION_VERSION).build();
 
-    let debug_utils_create_info = populate_debug_messenger_create_info();
+    let mut debug_utils_create_info = populate_debug_messenger_create_info();
 
-    let extension_names = platforms::required_extension_names();
+    let mut extension_names = platforms::required_extension_names();
 
     let requred_validation_layer_raw_names: Vec<CString> = required_validation_layers
         .iter()
@@ -83,28 +82,18 @@ pub fn create_instance(
         .map(|layer_name| layer_name.as_ptr())
         .collect();
 
-    let create_info = vk::InstanceCreateInfo {
-        s_type: vk::StructureType::INSTANCE_CREATE_INFO,
-        p_next: if ENABLE_VALIDATION_LAYERS {
-            &debug_utils_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT
-                as *const c_void
-        } else {
-            ptr::null()
-        },
-        flags: vk::InstanceCreateFlags::empty(),
-        p_application_info: &app_info,
-        pp_enabled_layer_names: if is_enable_debug {
-            layer_names.as_ptr()
-        } else {
-            ptr::null()
-        },
-        enabled_layer_count: if is_enable_debug {
-            layer_names.len()
-        } else {
-            0
-        } as u32,
-        pp_enabled_extension_names: extension_names.as_ptr(),
-        enabled_extension_count: extension_names.len() as u32,
+    let create_info = if !ENABLE_VALIDATION_LAYERS {
+        vk::InstanceCreateInfo::builder()
+        .application_info(&app_info)
+        .enabled_extension_names(&extension_names)
+        .build()
+    } else {
+        vk::InstanceCreateInfo::builder()
+        .application_info(&app_info)
+        .enabled_extension_names(&extension_names)
+        .push_next(&mut debug_utils_create_info)
+        .enabled_layer_names(&layer_names)
+        .build()
     };
 
     let instance: ash::Instance = unsafe {
@@ -151,7 +140,6 @@ pub fn pick_physical_device(
             **physical_device,
             surface_info
         );
-
         is_suitable
     }).min_by_key(|physical_device| {
         let device_properties = unsafe { instance.get_physical_device_properties(**physical_device) };
@@ -189,7 +177,9 @@ pub fn is_physical_device_suitable(
     let device_features = unsafe { instance.get_physical_device_features(physical_device) };
     let indices = find_queue_family(instance, physical_device, surface_info);
 
-    let is_queue_family_supported = indices.is_complete();
+    // Missing queue family, either graphics or present, return false
+    if !indices.is_complete() { return false; }
+
     let is_device_extension_supported =
         check_device_extension_support(instance, physical_device);
     let is_swapchain_supported = if is_device_extension_supported {
@@ -201,8 +191,7 @@ pub fn is_physical_device_suitable(
 
     let is_support_sampler_anisotropy = device_features.sampler_anisotropy == 1;
 
-    return is_queue_family_supported
-        && is_device_extension_supported
+    return is_device_extension_supported
         && is_swapchain_supported
         && is_support_sampler_anisotropy;
 
@@ -226,7 +215,6 @@ pub fn find_queue_family(
         {
             queue_family_indices.graphics_family = Some(index);
         }
-
         let is_present_support = unsafe {
             surface_info.surface_loader.get_physical_device_surface_support(
                 physical_device,
@@ -244,8 +232,8 @@ pub fn find_queue_family(
         }
 
         index += 1;
+        println!("JAKOB queue family count {}", &queue_family.queue_count);
     }
-
     queue_family_indices
 }
 
@@ -277,25 +265,24 @@ pub fn check_device_extension_support(
     }
 
     return required_extensions.is_empty();
-
 }
 
 pub fn query_swapchain_support(
     physical_device: vk::PhysicalDevice,
-    surface_stuff: &SurfaceInfo,
+    surface_info: &SurfaceInfo,
 ) -> SwapChainSupportDetail {
     unsafe {
-        let capabilities = surface_stuff
+        let capabilities = surface_info
             .surface_loader
-            .get_physical_device_surface_capabilities(physical_device, surface_stuff.surface)
+            .get_physical_device_surface_capabilities(physical_device, surface_info.surface)
             .expect("Failed to query for surface capabilities.");
-        let formats = surface_stuff
+        let formats = surface_info
             .surface_loader
-            .get_physical_device_surface_formats(physical_device, surface_stuff.surface)
+            .get_physical_device_surface_formats(physical_device, surface_info.surface)
             .expect("Failed to query for surface formats.");
-        let present_modes = surface_stuff
+        let present_modes = surface_info
             .surface_loader
-            .get_physical_device_surface_present_modes(physical_device, surface_stuff.surface)
+            .get_physical_device_surface_present_modes(physical_device, surface_info.surface)
             .expect("Failed to query for surface present mode.");
 
         SwapChainSupportDetail {

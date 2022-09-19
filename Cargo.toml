@@ -38,6 +38,10 @@ path = "bin/triangle.rs"
 name = "cube"
 path = "bin/cube.rs"
 
+[[bin]]
+name = "ash"
+path = "bin/ash.rs"
+
 [[bench]]
 name = "vulkano_bench"
 path = "benches/vulkano_bench.rs"
