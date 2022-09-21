@@ -12,7 +12,7 @@ pub struct SurfaceInfo {
     pub screen_width: u32,
     pub screen_height: u32,
 }
-pub struct SwapChainStuff {
+pub struct SwapChainInfo {
     pub swapchain_loader: ash::extensions::khr::Swapchain,
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_images: Vec<vk::Image>,

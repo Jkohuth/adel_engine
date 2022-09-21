@@ -14,6 +14,7 @@ use crate::adel_renderer_vulkan::utility::{
     platforms,
     structures,
     tools,
+    swapchain,
     functions,
 };
 
@@ -31,6 +32,10 @@ pub struct VulkanApp {
 
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
+
+    swapchain: structures::SwapChainInfo,
+    swapchain_imageviews: Vec<vk::ImageView>,
+
     window: winit::window::Window,
 }
 
@@ -53,6 +58,16 @@ impl VulkanApp {
             unsafe { device.get_device_queue(family_indices.graphics_family.unwrap(), 0) };
         let present_queue =
             unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
+
+        let swapchain_info = create_swapchain(
+                                &instance,
+                                &device,
+                                physical_device,
+                                &window,
+                                &surface_info,
+                                &family_indices);
+        let swapchain_imageviews = create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
+
         Self {
             _entry: entry,
             instance,
@@ -64,6 +79,8 @@ impl VulkanApp {
             device,
             graphics_queue,
             present_queue,
+            swapchain: swapchain_info,
+            swapchain_imageviews,
             window,
         }
 
@@ -131,4 +148,126 @@ pub fn create_logical_device(
     };
 
     (device, indices)
+}
+
+
+pub fn create_swapchain(
+    instance: &ash::Instance,
+    device: &ash::Device,
+    physical_device: vk::PhysicalDevice,
+    window: &winit::window::Window,
+    surface_info: &structures::SurfaceInfo,
+    queue_family: &structures::QueueFamilyIndices,
+) -> structures::SwapChainInfo {
+    let swapchain_support = swapchain::query_swapchain_support(physical_device, surface_info);
+
+    let surface_format = swapchain::choose_swapchain_format(&swapchain_support.formats);
+    let present_mode = swapchain::choose_swapchain_present_mode(&swapchain_support.present_modes);
+    let extent = swapchain::choose_swapchain_extent(&swapchain_support.capabilities, window);
+
+    let image_count = swapchain_support.capabilities.min_image_count + 1;
+    let image_count = if swapchain_support.capabilities.max_image_count > 0 {
+        image_count.min(swapchain_support.capabilities.max_image_count)
+    } else {
+        image_count
+    };
+
+    let (image_sharing_mode, queue_family_index_count, queue_family_indices) =
+        if queue_family.graphics_family != queue_family.present_family {
+            (
+                vk::SharingMode::CONCURRENT,
+                2,
+                vec![
+                    queue_family.graphics_family.unwrap(),
+                    queue_family.present_family.unwrap(),
+                ],
+            )
+        } else {
+            (vk::SharingMode::EXCLUSIVE, 0, vec![])
+        };
+    let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+        .surface(surface_info.surface)
+        .min_image_count(image_count)
+        .image_format(surface_format.format)
+        .image_color_space(surface_format.color_space)
+        .image_extent(extent)
+        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+        .image_array_layers(1)
+        .queue_family_indices(&queue_family_indices)
+        .pre_transform(swapchain_support.capabilities.current_transform)
+        .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+        .present_mode(present_mode)
+        .build();
+
+    let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device);
+    let swapchain = unsafe {
+        swapchain_loader
+            .create_swapchain(&swapchain_create_info, None)
+            .expect("ERROR: Failed to create swapchain")
+    };
+    let swapchain_images = unsafe {
+        swapchain_loader
+            .get_swapchain_images(swapchain)
+            .expect("ERROR: Failed to get swapchain images")
+    };
+
+    structures::SwapChainInfo {
+        swapchain_loader,
+        swapchain,
+        swapchain_format: surface_format.format,
+        swapchain_extent: extent,
+        swapchain_images,
+    }
+}
+
+pub fn create_image_views(
+    device: &ash::Device,
+    surface_format: vk::Format,
+    images: &Vec<vk::Image>,
+) -> Vec<vk::ImageView> {
+    let swapchain_imagesviews: Vec<vk::ImageView> = images.iter()
+        .map(|&image| {
+            create_image_view(
+                device,
+                image,
+                surface_format,
+                vk::ImageAspectFlags::COLOR,
+                1
+            )
+        }).collect();
+
+    swapchain_imagesviews
+}
+pub fn create_image_view(
+    device: &ash::Device,
+    image: vk::Image,
+    format: vk::Format,
+    aspect_flags: vk::ImageAspectFlags,
+    mip_levels: u32,
+) -> vk::ImageView {
+    let imageview_create_info = vk::ImageViewCreateInfo::builder()
+        .image(image)
+        .view_type(vk::ImageViewType::TYPE_2D)
+        .format(format)
+        .components(vk::ComponentMapping::builder()
+            .r(vk::ComponentSwizzle::IDENTITY)
+            .g(vk::ComponentSwizzle::IDENTITY)
+            .b(vk::ComponentSwizzle::IDENTITY)
+            .a(vk::ComponentSwizzle::IDENTITY)
+            .build())
+        .subresource_range(vk::ImageSubresourceRange::builder()
+            .aspect_mask(aspect_flags)
+            .base_mip_level(0)
+            .level_count(mip_levels)
+            .base_array_layer(0)
+            .layer_count(1)
+            .build())
+        .build();
+
+
+    unsafe {
+        device
+            .create_image_view(&imageview_create_info, None)
+            .expect("Failed to create Image View!")
+    }
 }

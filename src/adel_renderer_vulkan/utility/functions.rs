@@ -6,6 +6,7 @@ use crate::adel_renderer_vulkan::utility::{
     constants,
     debug,
     platforms,
+    swapchain,
     tools
 };
 
@@ -140,7 +141,7 @@ pub fn is_physical_device_suitable(
     let is_device_extension_supported =
         check_device_extension_support(instance, physical_device);
     let is_swapchain_supported = if is_device_extension_supported {
-        let swapchain_support = query_swapchain_support(physical_device, surface_info);
+        let swapchain_support = swapchain::query_swapchain_support(physical_device, surface_info);
         !swapchain_support.formats.is_empty() && !swapchain_support.present_modes.is_empty()
     } else {
         false
@@ -221,32 +222,6 @@ pub fn check_device_extension_support(
     }
 
     return required_extensions.is_empty();
-}
-
-pub fn query_swapchain_support(
-    physical_device: vk::PhysicalDevice,
-    surface_info: &structures::SurfaceInfo,
-) -> structures::SwapChainSupportDetail {
-    unsafe {
-        let capabilities = surface_info
-            .surface_loader
-            .get_physical_device_surface_capabilities(physical_device, surface_info.surface)
-            .expect("Failed to query for surface capabilities.");
-        let formats = surface_info
-            .surface_loader
-            .get_physical_device_surface_formats(physical_device, surface_info.surface)
-            .expect("Failed to query for surface formats.");
-        let present_modes = surface_info
-            .surface_loader
-            .get_physical_device_surface_present_modes(physical_device, surface_info.surface)
-            .expect("Failed to query for surface present mode.");
-
-        structures::SwapChainSupportDetail {
-            capabilities,
-            formats,
-            present_modes,
-        }
-    }
 }
 
 pub fn check_validation_layer_support(
