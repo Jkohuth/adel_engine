@@ -1,4 +1,6 @@
 use ash::vk;
+use std::os::raw::c_char;
+use super::structures::DeviceExtension;
 
 // Constants
 // Window title will change when this starts to interact with the rest of the code
@@ -14,4 +16,14 @@ pub const API_VERSION: u32 = vk::make_api_version(0, 1, 0, 0);
 pub const VALIDATION_LAYERS: &[&str] =  &["VK_LAYER_KHRONOS_validation"];
 pub const ENABLE_VALIDATION_LAYERS: bool = cfg!(debug_assertions);
 
-pub const DEVICE_EXTENSIONS: &[&str] = &["VK_KHR_swapchain"];
+pub const DEVICE_EXTENSIONS: DeviceExtension = DeviceExtension {
+    names: ["VK_KHR_swapchain"],
+};
+impl DeviceExtension {
+    pub fn get_extensions_raw_names(&self) -> [*const c_char; 1] {
+        [
+            // currently just enable the Swapchain extension.
+            ash::extensions::khr::Swapchain::name().as_ptr(),
+        ]
+    }
+}
