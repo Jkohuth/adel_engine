@@ -6,6 +6,7 @@ use ash::vk;
 use log;
 use std::ffi::{CString};
 use std::os::raw::c_char;
+use std::ptr;
 
 // TODO: Create a prelude and add these to it
 use crate::adel_renderer_vulkan::utility::{
@@ -36,6 +37,7 @@ pub struct VulkanApp {
     swapchain: structures::SwapChainInfo,
     swapchain_imageviews: Vec<vk::ImageView>,
 
+    render_pass: vk::RenderPass,
     window: winit::window::Window,
 }
 
@@ -68,6 +70,8 @@ impl VulkanApp {
                                 &family_indices);
         let swapchain_imageviews = create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
 
+        let render_pass = create_render_pass(&device, swapchain_info.swapchain_format);
+
         Self {
             _entry: entry,
             instance,
@@ -81,13 +85,63 @@ impl VulkanApp {
             present_queue,
             swapchain: swapchain_info,
             swapchain_imageviews,
+            render_pass,
             window,
         }
 
     }
 
 }
+pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format) -> vk::RenderPass {
+    let color_attachment = vk::AttachmentDescription::builder()
+        .format(surface_format)
+        .flags(vk::AttachmentDescriptionFlags::empty())
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+        .build();
 
+
+        let color_attachment_ref = vk::AttachmentReference::builder()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let subpasses = [vk::SubpassDescription::builder()
+            .color_attachments(&[color_attachment_ref])
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .build()];
+
+            let render_pass_attachments = [color_attachment];
+
+        let subpass_dependencies = [vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dependency_flags(vk::DependencyFlags::empty())
+            .build()];
+
+
+        let renderpass_create_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&render_pass_attachments)
+            .subpasses(&subpasses)
+            .dependencies(&subpass_dependencies)
+            .build();
+
+        unsafe {
+            device
+                .create_render_pass(&renderpass_create_info, None)
+                .expect("Failed to create render pass!")
+        }
+
+}
 pub fn create_logical_device(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
@@ -269,5 +323,22 @@ pub fn create_image_view(
         device
             .create_image_view(&imageview_create_info, None)
             .expect("Failed to create Image View!")
+    }
+}
+pub fn create_shader_module(device: &ash::Device, spv_file_location: &'static str) -> vk::ShaderModule {
+    use std::io::Cursor;
+    let mut spv_file =
+        Cursor::new(&include_bytes!(spv_file_location)[..]);
+
+    let code =
+        ash::util::read_spv(&mut spv_file).expect("Failed to read shader spv file");
+    let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(&code).build();
+
+
+    // Call to graphics card to
+    unsafe {
+        device
+            .create_shader_module(&shader_module_create_info, None)
+            .expect("Failed to create Shader Module!")
     }
 }
