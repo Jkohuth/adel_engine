@@ -8,6 +8,7 @@ use std::ffi::{CString};
 use std::os::raw::c_char;
 use std::ptr;
 
+use inline_spirv::include_spirv;
 // TODO: Create a prelude and add these to it
 use crate::adel_renderer_vulkan::utility::{
     constants::*,
@@ -38,6 +39,14 @@ pub struct VulkanApp {
     swapchain_imageviews: Vec<vk::ImageView>,
 
     render_pass: vk::RenderPass,
+    graphics_pipeline: vk::Pipeline,
+    pipeline_layout: vk::PipelineLayout,
+
+    framebuffers: Vec<vk::Framebuffer>,
+    command_pool: vk::CommandPool,
+    command_buffers: Vec<vk::CommandBuffer>,
+
+    sync_objects: structures::SyncObjects,
     window: winit::window::Window,
 }
 
@@ -72,6 +81,21 @@ impl VulkanApp {
 
         let render_pass = create_render_pass(&device, swapchain_info.swapchain_format);
 
+        let (graphics_pipeline, pipeline_layout) = create_graphics_pipeline(&device, render_pass.clone(), swapchain_info.swapchain_extent);
+
+        let framebuffers = create_framebuffers(&device, render_pass.clone(), &swapchain_imageviews, swapchain_info.swapchain_extent);
+
+        let command_pool = create_command_pool(&device, &family_indices);
+        let command_buffers = create_command_buffers(
+            &device,
+            command_pool,
+            graphics_pipeline,
+            &framebuffers,
+            render_pass,
+            swapchain_info.swapchain_extent,
+        );
+        let sync_objects = create_sync_objects(&device, MAX_FRAMES_IN_FLIGHT);
+
         Self {
             _entry: entry,
             instance,
@@ -86,6 +110,12 @@ impl VulkanApp {
             swapchain: swapchain_info,
             swapchain_imageviews,
             render_pass,
+            graphics_pipeline,
+            pipeline_layout,
+            framebuffers,
+            command_pool,
+            command_buffers,
+            sync_objects,
             window,
         }
 
@@ -325,20 +355,358 @@ pub fn create_image_view(
             .expect("Failed to create Image View!")
     }
 }
-pub fn create_shader_module(device: &ash::Device, spv_file_location: &'static str) -> vk::ShaderModule {
-    use std::io::Cursor;
-    let mut spv_file =
-        Cursor::new(&include_bytes!(spv_file_location)[..]);
-
-    let code =
-        ash::util::read_spv(&mut spv_file).expect("Failed to read shader spv file");
+pub fn create_shader_module(device: &ash::Device, code: &[u32]) -> vk::ShaderModule {
     let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(&code).build();
 
-
-    // Call to graphics card to
+    // Call to graphics card to build shader
     unsafe {
         device
             .create_shader_module(&shader_module_create_info, None)
             .expect("Failed to create Shader Module!")
     }
+}
+pub fn create_graphics_pipeline(
+    device: &ash::Device,
+    render_pass: vk::RenderPass,
+    swapchain_extent: vk::Extent2D,
+) -> (vk::Pipeline, vk::PipelineLayout) {
+
+    // Create Shader Modules
+    let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_vulkan/shaders/triangle.vert", vert, glsl, entry="main");
+    let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_vulkan/shaders/triangle.frag", frag, glsl, entry="main");
+    let vert_shader = create_shader_module(&device, vert_spv);
+    let frag_shader = create_shader_module(&device, frag_spv);
+
+
+    let main_function_name = CString::new("main").unwrap(); // the beginning function name in shader code.
+
+    let shader_stages = [
+        vk::PipelineShaderStageCreateInfo::builder()
+            .module(vert_shader)
+            .name(&main_function_name)
+            .stage(vk::ShaderStageFlags::VERTEX)
+            .build(),
+        vk::PipelineShaderStageCreateInfo::builder()
+            .module(frag_shader)
+            .name(&main_function_name)
+            .stage(vk::ShaderStageFlags::FRAGMENT)
+            .build()
+    ];
+    let vertex_input_binding_descriptions = [vk::VertexInputBindingDescription::builder()
+        .binding(0)
+        .stride(std::mem::size_of::<Vertex>() as u32)
+        .input_rate(vk::VertexInputRate::VERTEX)
+        .build()
+    ];
+    let vertex_input_attribute_descriptions = [
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(0)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(offset_of!(Vertex, position) as u32)
+                .build(),
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(1)
+                .format(vk::Format::R32G32B32_SFLOAT)
+                .offset(offset_of!(Vertex, color) as u32)
+                .build()
+            ];
+    let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::builder()
+        .vertex_binding_descriptions(&vertex_input_binding_descriptions)
+        .vertex_attribute_descriptions(&vertex_input_attribute_descriptions)
+        .build();
+
+    let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .primitive_restart_enable(false)
+        .build();
+
+    let viewports = [vk::Viewport::builder()
+        .x(0.0)
+        .y(0.0)
+        .width(swapchain_extent.width as f32)
+        .height(swapchain_extent.height as f32)
+        .min_depth(0.0)
+        .max_depth(1.0)
+        .build()
+    ];
+
+    let scissors = [vk::Rect2D::builder()
+        .offset(vk::Offset2D::builder()
+                    .x(0).y(0).build())
+        .extent(swapchain_extent)
+        .build()];
+
+    let viewport_state_create_info = vk::PipelineViewportStateCreateInfo::builder()
+        .scissor_count(scissors.len() as u32)
+        .scissors(&scissors)
+        .viewport_count(viewports.len() as u32)
+        .viewports(&viewports)
+        .build();
+
+    let rasterization_statue_create_info = vk::PipelineRasterizationStateCreateInfo::builder()
+        .depth_clamp_enable(false)
+        .cull_mode(vk::CullModeFlags::BACK)
+        .front_face(vk::FrontFace::CLOCKWISE)
+        .line_width(1.0)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .rasterizer_discard_enable(false)
+        .depth_bias_clamp(0.0)
+        .depth_bias_constant_factor(0.0)
+        .depth_bias_enable(false)
+        .depth_bias_slope_factor(0.0)
+        .build();
+
+    let multisample_state_create_info = vk::PipelineMultisampleStateCreateInfo::builder()
+            .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+            .sample_shading_enable(false)
+            .min_sample_shading(0.0)
+            .alpha_to_coverage_enable(false)
+            .alpha_to_one_enable(false)
+            .build();
+
+    let stencil_state = vk::StencilOpState::builder()
+        .fail_op(vk::StencilOp::KEEP)
+        .pass_op(vk::StencilOp::KEEP)
+        .depth_fail_op(vk::StencilOp::KEEP)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .compare_mask(0)
+        .write_mask(0)
+        .reference(0)
+        .build();
+
+    let depth_state_create_info = vk::PipelineDepthStencilStateCreateInfo::builder()
+        .depth_test_enable(false)
+        .depth_write_enable(false)
+        .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+        .depth_bounds_test_enable(false)
+        .stencil_test_enable(false)
+        .front(stencil_state)
+        .back(stencil_state)
+        .max_depth_bounds(1.0)
+        .min_depth_bounds(0.0)
+        .build();
+
+    let color_blend_attachment_states = [vk::PipelineColorBlendAttachmentState::builder()
+        .blend_enable(false)
+        .color_write_mask(vk::ColorComponentFlags::RGBA)
+        .src_color_blend_factor(vk::BlendFactor::ONE)
+        .dst_color_blend_factor(vk::BlendFactor::ZERO)
+        .color_blend_op(vk::BlendOp::ADD)
+        .src_alpha_blend_factor(vk::BlendFactor::ONE)
+        .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+        .alpha_blend_op(vk::BlendOp::ADD)
+        .build()
+    ];
+    let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+        .logic_op_enable(false)
+        .logic_op(vk::LogicOp::COPY)
+        .attachments(&color_blend_attachment_states)
+        .blend_constants([0.0, 0.0, 0.0, 0.0])
+        .build();
+
+    let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder().build();
+
+    let pipeline_layout = unsafe {
+        device
+            .create_pipeline_layout(&pipeline_layout_create_info, None)
+            .expect("Failed to create pipeline layout!")
+    };
+
+    let graphic_pipeline_create_infos = [vk::GraphicsPipelineCreateInfo::builder()
+        .stages(&shader_stages)
+        .vertex_input_state(&vertex_input_state_create_info)
+        .input_assembly_state(&vertex_input_assembly_state_info)
+        .viewport_state(&viewport_state_create_info)
+        .rasterization_state(&rasterization_statue_create_info)
+        .multisample_state(&multisample_state_create_info)
+        .depth_stencil_state(&depth_state_create_info)
+        .color_blend_state(&color_blend_state)
+        .layout(pipeline_layout)
+        .render_pass(render_pass)
+        .subpass(0)
+        .base_pipeline_handle(vk::Pipeline::null())
+        .base_pipeline_index(-1)
+        .build()
+    ];
+
+    log::info!("Creating the graphics pipeline");
+    let graphics_pipelines = unsafe {
+        device
+            .create_graphics_pipelines(
+                vk::PipelineCache::null(),
+                &graphic_pipeline_create_infos,
+                None,
+            )
+            .expect("Failed to create Graphics Pipeline!.")
+    };
+
+    unsafe {
+        device.destroy_shader_module(vert_shader, None);
+        device.destroy_shader_module(frag_shader, None);
+    }
+
+    (graphics_pipelines[0], pipeline_layout)
+}
+
+pub fn create_framebuffers(
+    device: &ash::Device,
+    render_pass: vk::RenderPass,
+    image_views: &Vec<vk::ImageView>,
+    swapchain_extent: vk::Extent2D,
+) -> Vec<vk::Framebuffer> {
+    let mut framebuffers = vec![];
+
+    for &image_view in image_views.iter() {
+        let attachments = [image_view];
+
+        let framebuffer_create_info = vk::FramebufferCreateInfo::builder()
+            .render_pass(render_pass)
+            .attachments(&attachments)
+            .width(swapchain_extent.width)
+            .height(swapchain_extent.height)
+            .layers(1)
+            .build();
+
+        let framebuffer = unsafe {
+            device
+                .create_framebuffer(&framebuffer_create_info, None)
+                .expect("Failed to create Framebuffer!")
+        };
+
+        framebuffers.push(framebuffer);
+    }
+
+    framebuffers
+}
+
+pub fn create_command_pool(
+    device: &ash::Device,
+    queue_families: &structures::QueueFamilyIndices,
+) -> vk::CommandPool {
+    let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
+        .queue_family_index(queue_families.graphics_family.unwrap())
+        .build();
+
+    unsafe {
+        device
+            .create_command_pool(&command_pool_create_info, None)
+            .expect("Failed to create Command Pool!")
+    }
+}
+
+pub fn create_command_buffers(
+    device: &ash::Device,
+    command_pool: vk::CommandPool,
+    graphics_pipeline: vk::Pipeline,
+    framebuffers: &Vec<vk::Framebuffer>,
+    render_pass: vk::RenderPass,
+    surface_extent: vk::Extent2D,
+) -> Vec<vk::CommandBuffer> {
+    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+        .command_pool(command_pool)
+        .command_buffer_count(framebuffers.len() as u32)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .build();
+
+    let command_buffers = unsafe {
+        device
+            .allocate_command_buffers(&command_buffer_allocate_info)
+            .expect("Failed to allocate Command Buffers!")
+    };
+/*
+    for (i, &command_buffer) in command_buffers.iter().enumerate() {
+        let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
+            .build();
+
+        unsafe {
+            device
+                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
+                .expect("Failed to begin recording Command Buffer at beginning!");
+        }
+
+        let clear_values = [vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        }];
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .render_area(vk::Rect2D::builder()
+                .offset(vk::Offset2D { x: 0, y: 0})
+                .extent(surface_extent)
+                .build()
+            ).clear_values(&clear_values)
+            .framebuffer(framebuffers[i])
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                command_buffer,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            );
+            device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                graphics_pipeline,
+            );
+            device.cmd_draw(command_buffer, 3, 1, 0, 0);
+
+            device.cmd_end_render_pass(command_buffer);
+
+            device
+                .end_command_buffer(command_buffer)
+                .expect("Failed to record Command Buffer at Ending!");
+        }
+    }*/
+
+    command_buffers
+}
+
+pub fn create_sync_objects(device: &ash::Device, max_frame_in_flight: usize) -> structures::SyncObjects {
+    let mut sync_objects = structures::SyncObjects {
+        image_available_semaphores: vec![],
+        render_finished_semaphores: vec![],
+        inflight_fences: vec![],
+    };
+
+    let semaphore_create_info = vk::SemaphoreCreateInfo::builder()
+        .build();
+
+    let fence_create_info = vk::FenceCreateInfo::builder()
+        .flags(vk::FenceCreateFlags::SIGNALED)
+        .build();
+
+    for _ in 0..max_frame_in_flight {
+        unsafe {
+            let image_available_semaphore = device
+                .create_semaphore(&semaphore_create_info, None)
+                .expect("Failed to create Semaphore Object!");
+            let render_finished_semaphore = device
+                .create_semaphore(&semaphore_create_info, None)
+                .expect("Failed to create Semaphore Object!");
+            let inflight_fence = device
+                .create_fence(&fence_create_info, None)
+                .expect("Failed to create Fence Object!");
+
+            sync_objects
+                .image_available_semaphores
+                .push(image_available_semaphore);
+            sync_objects
+                .render_finished_semaphores
+                .push(render_finished_semaphore);
+            sync_objects.inflight_fences.push(inflight_fence);
+        }
+    }
+
+    sync_objects
+}
+
+struct Vertex {
+    position: nalgebra::Vector2<f32>,
+    color: nalgebra::Vector3<f32>
 }

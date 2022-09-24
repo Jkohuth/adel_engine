@@ -9,10 +9,11 @@ edition = "2021"
 criterion = "0.3"
 
 [dependencies]
-vulkano = {path = "../local_resources/vulkano/vulkano"}
-vulkano-shaders = {path = "../local_resources/vulkano/vulkano-shaders"}
-vulkano-win = {path = "../local_resources/vulkano/vulkano-win"}
+#vulkano = {path = "../local_resources/vulkano/vulkano"}
+#vulkano-shaders = {path = "../local_resources/vulkano/vulkano-shaders"}
+#vulkano-win = {path = "../local_resources/vulkano/vulkano-win"}
 ash = "0.37.0"
+inline-spirv = "0.1.4"
 
 
 winit = "0.27.0"
@@ -30,10 +31,6 @@ num = "0.4.0"
 [[bin]]
 name = "hello_world"
 path = "bin/hello_world.rs"
-
-[[bin]]
-name = "triangle"
-path = "bin/triangle.rs"
 
 [[bin]]
 name = "cube"

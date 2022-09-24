@@ -6,7 +6,7 @@ use winit::{
 };
 use crate::adel_input::InputConsumer;
 use crate::adel_ecs::{System, World};
-use crate::adel_renderer::TransformComponent;
+//use crate::adel_renderer::TransformComponent;
 use glam::{Vec3};
 use crate::adel_camera::Camera;
 // This class will be a struct that contains the current input variables
@@ -41,7 +41,7 @@ impl System for KeyboardHandler {
         if input_consumer.pressed.is_empty() {
             return;
         }
-
+/*
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
 
@@ -58,6 +58,7 @@ impl System for KeyboardHandler {
                 }
             }
         }
+        */
     }
     fn name(&self) -> &str {
         self.name
@@ -70,8 +71,8 @@ pub fn print_type_of<T>(_: &T) {
 static LOOK_SPEED: f32 = 1.5;
 static MOVE_SPEED: f32 = 3.0;
 
-fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &mut TransformComponent) {
-
+fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32) { // camera_transform: &mut TransformComponent) {
+/*
     let mut rotate = Vec3::new(0.0, 0.0, 0.0);
     // Look Right
     if keys.contains(&VirtualKeyCode::Right) {
@@ -129,4 +130,5 @@ fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &
     if Vec3::dot(move_dir, move_dir) > f32::EPSILON {
         camera_transform.translation += MOVE_SPEED * dt * move_dir.normalize();
     }
+*/
 }
