@@ -19,6 +19,8 @@ use crate::adel_renderer_vulkan::utility::{
     swapchain,
     functions,
 };
+use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
+use winit::event_loop::{EventLoop, ControlFlow};
 
 pub struct VulkanApp {
     // vulkan stuff
@@ -35,7 +37,7 @@ pub struct VulkanApp {
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
 
-    swapchain: structures::SwapChainInfo,
+    swapchain_info: structures::SwapChainInfo,
     swapchain_imageviews: Vec<vk::ImageView>,
 
     render_pass: vk::RenderPass,
@@ -46,7 +48,10 @@ pub struct VulkanApp {
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
 
-    sync_objects: structures::SyncObjects,
+    image_available_semaphores: Vec<vk::Semaphore>,
+    render_finished_semaphores: Vec<vk::Semaphore>,
+    in_flight_fences: Vec<vk::Fence>,
+    current_frame: usize,
     window: winit::window::Window,
 }
 
@@ -107,7 +112,7 @@ impl VulkanApp {
             device,
             graphics_queue,
             present_queue,
-            swapchain: swapchain_info,
+            swapchain_info,
             swapchain_imageviews,
             render_pass,
             graphics_pipeline,
@@ -115,7 +120,10 @@ impl VulkanApp {
             framebuffers,
             command_pool,
             command_buffers,
-            sync_objects,
+            image_available_semaphores: sync_objects.image_available_semaphores,
+            render_finished_semaphores: sync_objects.render_finished_semaphores,
+            in_flight_fences: sync_objects.inflight_fences,
+            current_frame: 0,
             window,
         }
 
@@ -705,7 +713,149 @@ pub fn create_sync_objects(device: &ash::Device, max_frame_in_flight: usize) -> 
 
     sync_objects
 }
+impl VulkanApp {
+    fn draw_frame(&mut self) {
+        let wait_fences = [self.in_flight_fences[self.current_frame]];
 
+        let (image_index, _is_sub_optimal) = unsafe {
+            self.device
+                .wait_for_fences(&wait_fences, true, std::u64::MAX)
+                .expect("Failed to wait for Fence!");
+
+            self.swapchain_info.swapchain_loader
+                .acquire_next_image(
+                    self.swapchain_info.swapchain,
+                    std::u64::MAX,
+                    self.image_available_semaphores[self.current_frame],
+                    vk::Fence::null(),
+                )
+                .expect("Failed to acquire next image.")
+        };
+
+        let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
+        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+        let signal_semaphores = [self.render_finished_semaphores[self.current_frame]];
+
+        let submit_infos = [vk::SubmitInfo::builder()
+            .wait_semaphores(&wait_semaphores)
+            .wait_dst_stage_mask(&wait_stages)
+            .command_buffers(&[self.command_buffers[image_index as usize]])
+            .signal_semaphores(&signal_semaphores)
+            .build()];
+
+        unsafe {
+            self.device
+                .reset_fences(&wait_fences)
+                .expect("Failed to reset Fence!");
+
+            self.device
+                .queue_submit(
+                    self.graphics_queue,
+                    &submit_infos,
+                    self.in_flight_fences[self.current_frame],
+                )
+                .expect("Failed to execute queue submit.");
+        }
+
+        let swapchains = [self.swapchain_info.swapchain];
+
+        let present_info = vk::PresentInfoKHR::builder()
+            .wait_semaphores(&signal_semaphores)
+            .swapchains(&swapchains)
+            .image_indices(&[image_index])
+            .build();
+
+        unsafe {
+            self.swapchain_info.swapchain_loader
+                .queue_present(self.present_queue, &present_info)
+                .expect("Failed to execute queue present.");
+        }
+
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+    }
+    pub fn main_loop(mut self, event_loop: EventLoop<()>) {
+
+        event_loop.run(move |event, _, control_flow| {
+
+            match event {
+                | Event::WindowEvent { event, .. } => {
+                    match event {
+                        | WindowEvent::CloseRequested => {
+                            *control_flow = ControlFlow::Exit
+                        },
+                        | WindowEvent::KeyboardInput { input, .. } => {
+                            match input {
+                                | KeyboardInput { virtual_keycode, state, .. } => {
+                                    match (virtual_keycode, state) {
+                                        | (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                                            *control_flow = ControlFlow::Exit
+                                        },
+                                        | _ => {},
+                                    }
+                                },
+                            }
+                        },
+                        | _ => {},
+                    }
+                },
+                | Event::MainEventsCleared => {
+                    self.window.request_redraw();
+                },
+                | Event::RedrawRequested(_window_id) => {
+                    self.draw_frame();
+                },
+                | Event::LoopDestroyed => {
+                    unsafe {
+                        self.device.device_wait_idle()
+                            .expect("Failed to wait device idle!")
+                    };
+                },
+                _ => (),
+            }
+
+        })
+    }
+}
+
+impl Drop for VulkanApp {
+    fn drop(&mut self) {
+        unsafe {
+            for i in 0..MAX_FRAMES_IN_FLIGHT {
+                self.device
+                    .destroy_semaphore(self.image_available_semaphores[i], None);
+                self.device
+                    .destroy_semaphore(self.render_finished_semaphores[i], None);
+                self.device.destroy_fence(self.in_flight_fences[i], None);
+            }
+
+            self.device.destroy_command_pool(self.command_pool, None);
+
+            for &framebuffer in self.framebuffers.iter() {
+                self.device.destroy_framebuffer(framebuffer, None);
+            }
+
+            self.device.destroy_pipeline(self.graphics_pipeline, None);
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_render_pass(self.render_pass, None);
+
+            for &imageview in self.swapchain_imageviews.iter() {
+                self.device.destroy_image_view(imageview, None);
+            }
+
+            self.swapchain_info.swapchain_loader
+                .destroy_swapchain(self.swapchain_info.swapchain, None);
+            self.device.destroy_device(None);
+            self.surface_loader.destroy_surface(self.surface, None);
+
+            if ENABLE_VALIDATION_LAYERS {
+                self.debug_utils_loader
+                    .destroy_debug_utils_messenger(self.debug_messenger, None);
+            }
+            self.instance.destroy_instance(None);
+        }
+    }
+}
 struct Vertex {
     position: nalgebra::Vector2<f32>,
     color: nalgebra::Vector3<f32>
