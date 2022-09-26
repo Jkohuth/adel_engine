@@ -255,3 +255,65 @@ pub fn check_validation_layer_support(
     true
 }
 
+
+pub fn create_logical_device(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    surface_info: &structures::SurfaceInfo,
+    required_validation_layers: &Vec<&str>
+) ->  (ash::Device, structures::QueueFamilyIndices) {
+    let indices = find_queue_family(instance, physical_device, surface_info);
+
+    use std::collections::HashSet;
+    let mut unique_queue_familes = HashSet::new();
+    unique_queue_familes.insert(indices.graphics_family.unwrap());
+    unique_queue_familes.insert(indices.present_family.unwrap());
+
+    let queue_priorities = [1.0_f32];
+    let mut queue_create_infos = vec![];
+    for &queue_family in unique_queue_familes.iter() {
+        let queue_create_info = vk::DeviceQueueCreateInfo::builder()
+        .flags(vk::DeviceQueueCreateFlags::empty())
+        .queue_family_index(queue_family)
+        .queue_priorities(&queue_priorities)
+        .build();
+        queue_create_infos.push(queue_create_info);
+    }
+    let physical_device_features = vk::PhysicalDeviceFeatures::builder().build();
+
+    let requred_validation_layer_raw_names: Vec<CString> = required_validation_layers
+        .iter()
+        .map(|layer_name| CString::new(*layer_name).unwrap())
+        .collect();
+    let layer_names: Vec<*const i8> = requred_validation_layer_raw_names
+        .iter()
+        .map(|layer_name| layer_name.as_ptr())
+        .collect();
+
+        let enabled_extension_names = constants::DEVICE_EXTENSIONS.get_extensions_raw_names();
+
+
+    let device_create_info = if constants::ENABLE_VALIDATION_LAYERS {
+     vk::DeviceCreateInfo::builder()
+        .flags(vk::DeviceCreateFlags::empty())
+        .queue_create_infos(&queue_create_infos)
+        .enabled_layer_names(&layer_names)
+        .enabled_extension_names(&enabled_extension_names)
+        .enabled_features(&physical_device_features)
+        .build()
+    } else {
+        vk::DeviceCreateInfo::builder()
+        .flags(vk::DeviceCreateFlags::empty())
+        .queue_create_infos(&queue_create_infos)
+        .enabled_extension_names(&enabled_extension_names)
+        .enabled_features(&physical_device_features)
+        .build()
+    };
+    let device: ash::Device = unsafe {
+        instance
+            .create_device(physical_device, &device_create_info, None)
+            .expect("ERROR: Failed to create logical device")
+    };
+
+    (device, indices)
+}

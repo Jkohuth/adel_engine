@@ -48,3 +48,7 @@ pub struct SyncObjects {
     pub render_finished_semaphores: Vec<vk::Semaphore>,
     pub inflight_fences: Vec<vk::Fence>,
 }
+pub struct Vertex {
+    pub position: [f32; 2],
+    pub color: [f32; 3]
+}
