@@ -69,6 +69,8 @@ pub struct VulkanApp {
     in_flight_fences: Vec<vk::Fence>,
     current_frame: usize,
     window: winit::window::Window,
+
+    is_framebuffer_resized: bool,
 }
 
 impl VulkanApp {
@@ -149,6 +151,7 @@ impl VulkanApp {
             in_flight_fences: sync_objects.inflight_fences,
             current_frame: 0,
             window,
+            is_framebuffer_resized: false,
         }
 
     }
@@ -159,19 +162,29 @@ impl VulkanApp {
     fn draw_frame(&mut self) {
         let wait_fences = [self.in_flight_fences[self.current_frame]];
 
-        let (image_index, _is_sub_optimal) = unsafe {
+        unsafe {
             self.device
                 .wait_for_fences(&wait_fences, true, std::u64::MAX)
                 .expect("Failed to wait for Fence!");
+        }
 
-            self.swapchain_info.swapchain_loader
-                .acquire_next_image(
-                    self.swapchain_info.swapchain,
-                    std::u64::MAX,
-                    self.image_available_semaphores[self.current_frame],
-                    vk::Fence::null(),
-                )
-                .expect("Failed to acquire next image.")
+        let (image_index, _is_sub_optimal) = unsafe {
+            let result = self.swapchain_info.swapchain_loader.acquire_next_image(
+                self.swapchain_info.swapchain,
+                std::u64::MAX,
+                self.image_available_semaphores[self.current_frame],
+                vk::Fence::null(),
+            );
+            match result {
+                Ok(image_index) => image_index,
+                Err(vk_result) => match vk_result {
+                    vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                        self.recreate_swapchain();
+                        return;
+                    }
+                    _ => panic!("Failed to acquire Swap Chain Image!"),
+                },
+            }
         };
 
         let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
@@ -207,10 +220,21 @@ impl VulkanApp {
             .image_indices(&[image_index])
             .build();
 
-        unsafe {
+        let result =unsafe {
             self.swapchain_info.swapchain_loader
                 .queue_present(self.present_queue, &present_info)
-                .expect("Failed to execute queue present.");
+        };
+
+        let is_resized = match result {
+            Ok(_) => self.is_framebuffer_resized,
+            Err(vk_result) => match vk_result {
+                vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR => true,
+                _ => panic!("Failed to execute queue present."),
+            },
+        };
+        if is_resized {
+            self.is_framebuffer_resized = false;
+            self.recreate_swapchain();
         }
 
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -218,7 +242,7 @@ impl VulkanApp {
 
     fn recreate_swapchain(&mut self) {
         // parameters -------------
-        let surface_suff = structures::SurfaceInfo {
+        let surface_info = structures::SurfaceInfo {
             surface_loader: self.surface_info.surface_loader.clone(),
             surface: self.surface_info.surface,
             screen_width: self.window.inner_size().width,
@@ -238,7 +262,7 @@ impl VulkanApp {
             &self.device,
             self._physical_device,
             &self.window,
-            &self.surface_info,
+            &surface_info,
             &self.queue_family,
         );
         self.swapchain_info.swapchain_loader = swapchain_info.swapchain_loader;
@@ -253,13 +277,6 @@ impl VulkanApp {
             &self.swapchain_info.swapchain_images,
         );
         self.render_pass = pipeline::create_render_pass(&self.device, self.swapchain_info.swapchain_format);
-        let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(
-            &self.device,
-            self.render_pass,
-            swapchain_info.swapchain_extent,
-        );
-        self.graphics_pipeline = graphics_pipeline;
-        self.pipeline_layout = pipeline_layout;
 
         self.framebuffers = buffers::create_framebuffers(
             &self.device,
@@ -270,7 +287,7 @@ impl VulkanApp {
         self.command_buffers = buffers::create_command_buffers(
             &self.device,
             self.command_pool,
-            self.graphics_pipeline,
+            self.graphics_pipeline.clone(),
             &self.framebuffers,
             self.render_pass,
             self.swapchain_info.swapchain_extent,
@@ -285,10 +302,6 @@ impl VulkanApp {
             for &framebuffer in self.framebuffers.iter() {
                 self.device.destroy_framebuffer(framebuffer, None);
             }
-            // TODO: Pipeline doesn't need to be destroyed during swapchain recreation
-            self.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device
-                .destroy_pipeline_layout(self.pipeline_layout, None);
             self.device.destroy_render_pass(self.render_pass, None);
             for &image_view in self.swapchain_imageviews.iter() {
                 self.device.destroy_image_view(image_view, None);
@@ -354,6 +367,9 @@ impl Drop for VulkanApp {
             }
 
             self.cleanup_swapchain();
+            self.device.destroy_pipeline(self.graphics_pipeline, None);
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
 
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.free_memory(self.vertex_buffer_memory, None);

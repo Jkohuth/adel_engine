@@ -68,6 +68,20 @@ pub fn create_command_buffers(
             .allocate_command_buffers(&command_buffer_allocate_info)
             .expect("Failed to allocate Command Buffers!")
     };
+    let viewport = [vk::Viewport::builder()
+        .x(0.0)
+        .y(0.0)
+        .width(surface_extent.width as f32)
+        .height(surface_extent.height as f32)
+        .min_depth(0.0)
+        .max_depth(1.0)
+        .build()];
+
+    let scissors = [vk::Rect2D::builder()
+        .offset(vk::Offset2D::builder()
+                    .x(0).y(0).build())
+        .extent(surface_extent)
+        .build()];
     for (i, &command_buffer) in command_buffers.iter().enumerate() {
         let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
@@ -94,6 +108,9 @@ pub fn create_command_buffers(
             ).clear_values(&clear_values)
             .framebuffer(framebuffers[i])
             .build();
+
+
+
         unsafe {
             device.cmd_begin_render_pass(
                 command_buffer,
@@ -107,7 +124,8 @@ pub fn create_command_buffers(
             );
             let vertex_buffers = [vertex_buffer];
             let offsets = [0_u64];
-
+            device.cmd_set_viewport(command_buffer, 0, &viewport);
+            device.cmd_set_scissor(command_buffer, 0, &scissors);
             device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
 
             device.cmd_draw(command_buffer, 3, 1, 0, 0);

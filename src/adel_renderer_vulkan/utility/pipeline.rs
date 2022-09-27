@@ -255,8 +255,12 @@ pub fn create_graphics_pipeline(
         .attachments(&color_blend_attachment_states)
         .blend_constants([0.0, 0.0, 0.0, 0.0])
         .build();
-
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder().build();
+
+    let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+    let pipeline_dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+        .dynamic_states(&dynamic_state)
+        .build();
 
     let pipeline_layout = unsafe {
         device
@@ -273,6 +277,7 @@ pub fn create_graphics_pipeline(
         .multisample_state(&multisample_state_create_info)
         .depth_stencil_state(&depth_state_create_info)
         .color_blend_state(&color_blend_state)
+        .dynamic_state(&pipeline_dynamic_state)
         .layout(pipeline_layout)
         .render_pass(render_pass)
         .subpass(0)
