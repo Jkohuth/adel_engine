@@ -9,12 +9,12 @@ edition = "2021"
 criterion = "0.3"
 
 [dependencies]
-vulkano = {path = "../local_resources/vulkano/vulkano"}
-vulkano-shaders = {path = "../local_resources/vulkano/vulkano-shaders"}
-vulkano-win = {path = "../local_resources/vulkano/vulkano-win"}
-#vulkano = "0.30.0"
-#vulkano-shaders = "0.30.0"
-#vulkano-win = "0.30.0"
+#vulkano = {path = "../local_resources/vulkano/vulkano"}
+#vulkano-shaders = {path = "../local_resources/vulkano/vulkano-shaders"}
+#vulkano-win = {path = "../local_resources/vulkano/vulkano-win"}
+ash = "0.37.0"
+inline-spirv = "0.1.4"
+
 
 winit = "0.27.0"
 glam = "0.21.2"
@@ -24,18 +24,21 @@ log = "0.4"
 simple_logger = "2.1.0"
 png = "0.17"
 bytemuck = { version = "1.7", features = ["derive", "extern_crate_std", "min_const_generics"] }
+tobj = "3.2.3"
+nalgebra = "0.31.0"
+num = "0.4.0"
 
 [[bin]]
 name = "hello_world"
 path = "bin/hello_world.rs"
 
 [[bin]]
-name = "triangle"
-path = "bin/triangle.rs"
-
-[[bin]]
 name = "cube"
 path = "bin/cube.rs"
+
+[[bin]]
+name = "ash"
+path = "bin/ash.rs"
 
 [[bench]]
 name = "vulkano_bench"

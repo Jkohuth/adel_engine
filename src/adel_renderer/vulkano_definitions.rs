@@ -1,19 +1,17 @@
 use std::sync::Arc;
 use bytemuck::{Zeroable, Pod,};
 use glam::{Vec2, Vec3, Vec4, Mat2, Mat4};
+#[allow(unused_imports)]
 use log;
 //use cgmath::{ BaseFloat, Matrix2, Matrix4, Rad, SquareMatrix, Vector2, Vector3, Vector4 };
 
 use vulkano::{
-    buffer::CpuAccessibleBuffer,
-    device::Device,
     image::{
         swapchain::SwapchainImage, StorageImage,view::ImageView,
     },
 };
 use winit::window::Window;
 
-use crate::adel_renderer::renderer_utils;
 
 // Final render target onto which the whole app is rendered (per window)
 pub type FinalImageView = Arc<ImageView<SwapchainImage<Window>>>;
@@ -21,11 +19,63 @@ pub type FinalImageView = Arc<ImageView<SwapchainImage<Window>>>;
 pub type DeviceImageView = Arc<ImageView<StorageImage>>;
 
 
+pub struct VertexBuilder {
+    position: Option<[f32;3]>,
+    color: Option<[f32;3]>,
+    normal: Option<[f32;3]>,
+    uv: Option<[f32;2]>
+}
+impl VertexBuilder {
+    pub fn new() -> VertexBuilder {
+        Self {
+            position: None,
+            color: None,
+            normal: None,
+            uv: None,
+        }
+    }
+    pub fn position(&mut self, position: [f32; 3]) -> &mut Self {
+        self.position = Some(position);
+        self
+    }
+    pub fn color(&mut self, color: [f32; 3]) -> &mut Self {
+        self.color = Some(color);
+        self
+    }
+
+    pub fn normal(&mut self, normal: [f32; 3]) -> &mut Self {
+        self.normal = Some(normal);
+        self
+    }
+    pub fn uv(&mut self, uv: [f32; 2]) -> &mut Self {
+        self.uv = Some(uv);
+        self
+    }
+
+    pub fn build(&self) -> Vertex {
+        Vertex {
+            position: self.position.unwrap_or_default(),
+            color: self.color.unwrap_or_default(),
+            normal: self.normal.unwrap_or_default(),
+            uv: self.uv.unwrap_or_default(),
+        }
+    }
+}
+
+
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, Zeroable, Pod)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, Zeroable, Pod)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub color: [f32; 3],
+    pub normal: [f32; 3],
+    pub uv: [f32; 2],
+}
+
+impl Vertex {
+    pub fn new() -> VertexBuilder {
+        VertexBuilder::new()
+    }
 }
 
 #[repr(C)]
@@ -166,57 +216,6 @@ impl Default for Transform2dComponent {
     }
 }
 
-#[derive(Debug)]
-pub struct ModelBuilder {
-    // May make these Option in the future
-    verticies: Vec<Vertex>,
-    indicies: Vec<u16>,
-}
-
-impl ModelBuilder {
-    pub fn new(verticies: Vec<Vertex>, indicies: Vec<u16>) -> Self {
-        Self {
-            verticies,
-            indicies,
-        }
-    }
-    // Return a tuple of a vertex and index buffer
-    pub fn build(&self, device: &Arc<Device>) -> (Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u16]>>) {
-            (renderer_utils::create_vertex_buffers(device, self.verticies.clone()).unwrap(),
-             renderer_utils::create_index_buffers(device, self.indicies.clone()).unwrap() )
-    }
-}
-
-// May need to update to include a Staging buffer in the future
-#[derive(Debug)]
-pub struct ModelComponent {
-    pub builder: ModelBuilder,
-    pub vertex_buffer: Option<Arc<CpuAccessibleBuffer<[Vertex]>>>,
-    pub index_buffer: Option<Arc<CpuAccessibleBuffer<[u16]>>>,
-}
-
-impl ModelComponent {
-    pub fn new(builder: ModelBuilder) -> Self {
-        Self {
-            builder,
-            vertex_buffer: None,
-            index_buffer: None,
-        }
-    }
-    pub fn build(&mut self, device: &Arc<Device>) {
-        // If Vertex_buffer exists and this was called again just pass, hmmmmmm maybe log?
-        match self.vertex_buffer {
-            None => {
-                let buffers = self.builder.build(device);
-                self.vertex_buffer = Some(buffers.0);
-                self.index_buffer = Some(buffers.1);
-            }
-            _ => {
-                log::debug!("Build called on object that already has buffer");
-            }
-        }
-    }
-}
 
 
 #[derive(Debug)]

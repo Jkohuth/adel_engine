@@ -1,11 +1,10 @@
-use crate::adel_ecs::{System, World};
 use glam::{Vec3, Mat4};
 use more_asserts;
 
 pub struct Camera {
     projection_matrix: Mat4,
     view_matrix: Mat4,
-    name: &'static str,
+    _name: &'static str,
 }
 
 impl Camera {
@@ -13,7 +12,7 @@ impl Camera {
         Self {
             projection_matrix: Mat4::IDENTITY,
             view_matrix: Mat4::IDENTITY,
-            name: "camera",
+            _name: "camera",
         }
     }
 
@@ -25,7 +24,7 @@ impl Camera {
         self.projection_matrix.w_axis.x = -(right + left) / (right - left);
         self.projection_matrix.w_axis.y = -(bottom + top) / (bottom - top);
         self.projection_matrix.w_axis.z = -near / (far - near);
-        
+
         /* Dead Code
         self.projection_matrix[0][0] = 2.0 / (right - left);
         self.projection_matrix[1][1] = 2.0 / (bottom - top);
@@ -38,7 +37,7 @@ impl Camera {
 
     pub fn set_perspective_projection(&mut self, fovy: f32, aspect: f32, near: f32, far: f32) {
         more_asserts::assert_gt!((aspect - f32::MIN).abs(), 0.0);
-        
+
         let tan_half_fovy = f32::tan(fovy/2.0);
         self.projection_matrix = Mat4::IDENTITY;
         self.projection_matrix.x_axis.x = 1.0 / (aspect * tan_half_fovy);
@@ -46,7 +45,7 @@ impl Camera {
         self.projection_matrix.z_axis.z = far / (far - near);
         self.projection_matrix.z_axis.w = 1.0;
         self.projection_matrix.w_axis.z = -(far * near) / (far - near);
-        
+
         /* Dead code may remove
         self.projection_matrix[0][0] = 1.0 / (aspect * tan_half_fovy);
         self.projection_matrix[1][1] = 1.0 / (tan_half_fovy);
@@ -57,12 +56,12 @@ impl Camera {
     }
 
     pub fn set_view_direction(&mut self, position: Vec3, direction: Vec3, up: Option<Vec3>) {
-        let w = Vec3::normalize(direction); 
+        let w = Vec3::normalize(direction);
         // Supply default up value if None was passed into the function
         let u = Vec3::normalize(w.cross(up.unwrap_or(Vec3::new(0.0, -1.0, 0.0))));
         let v = w.cross(u);
-    
-        self.view_matrix = Mat4::IDENTITY; 
+
+        self.view_matrix = Mat4::IDENTITY;
         self.view_matrix.x_axis.x = u.x;
         self.view_matrix.y_axis.x = u.y;
         self.view_matrix.z_axis.x = u.z;
@@ -75,7 +74,7 @@ impl Camera {
         self.view_matrix.w_axis.x = -Vec3::dot(u, position);
         self.view_matrix.w_axis.y = -Vec3::dot(v, position);
         self.view_matrix.w_axis.z = -Vec3::dot(w, position);
-        
+
         /* Dead code will remove
         self.view_matrix[0][0] = u.x;
         self.view_matrix[1][0] = u.y;
@@ -91,12 +90,12 @@ impl Camera {
         self.view_matrix[3][2] = -Vec3::dot(w, position);
         */
     }
-    
+
     pub fn set_view_target(&mut self, position: Vec3, target: Vec3, up: Option<Vec3>) {
         more_asserts::assert_gt!(target.dot(target), f32::MIN);
         self.set_view_direction(position, target - position, up);
     }
-    
+
     pub fn set_view_yxz(&mut self, position: Vec3, rotation: Vec3) {
       let c3 = f32::cos(rotation.z);
       let s3 = f32::sin(rotation.z);

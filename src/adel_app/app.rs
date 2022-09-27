@@ -1,5 +1,5 @@
 use crate::adel_ecs::World;
-use crate::adel_renderer::{VulkanoRenderer, ModelComponent};
+//use crate::adel_renderer::{VulkanoRenderer};
 #[allow(unused_imports)]
 use crate::adel_ecs::System;
 use crate::adel_winit::WinitWindow;
@@ -8,8 +8,8 @@ use crate::adel_input::{ KeyboardHandler, InputConsumer };
 use glam::{Vec3};
 use std::collections::HashSet;
 use std::time;
+#[allow(unused_imports)]
 use log;
-use std::cell::RefCell;
 
 use winit::{
     event::{
@@ -31,14 +31,13 @@ impl Application {
     pub fn new(mut world: World) -> Self {
         let mut winit_window = WinitWindow::new();
         let event_loop: EventLoop<()> = winit_window.event_loop().unwrap();
-        let renderer = VulkanoRenderer::new(winit_window.window().unwrap());
-        renderer.create_models(&mut world.borrow_component_mut::<ModelComponent>().unwrap());
+        //let renderer = VulkanoRenderer::new(winit_window.window().unwrap());
         // Create the input Consumer and keyboard handler
         let keyboard_handler = KeyboardHandler::new();
         let input_consumer = InputConsumer { pressed: HashSet::new() };
         let mut camera = Camera::new();
         // TODO: Set up Fovy with radian angle
-        camera.set_perspective_projection((50.0f32).to_radians(), renderer.vulkano_window().aspect_ratio(), 0.1, 10.0);
+        //camera.set_perspective_projection((50.0f32).to_radians(), renderer.vulkano_window().aspect_ratio(), 0.1, 10.0);
         //camera.set_view_direction(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.1, 0.0, 1.0), None);
         //camera.set_view_target(Vec3::new(-1.0, 2.0, -2.0), Vec3::new(0.0, 0.0, 2.5), None);
         camera.set_view_yxz(Vec3::new(-1.0, 2.0, -2.0),
@@ -48,7 +47,7 @@ impl Application {
         //log::info!("What is the value {:?}", keyboard.pressed);
         let mut systems: Vec<Box<dyn System>> = Vec::new();
         systems.push(Box::new(keyboard_handler));
-        systems.push(Box::new(renderer));
+        //systems.push(Box::new(renderer));
         Self {
             world,
             systems,
@@ -57,9 +56,15 @@ impl Application {
     }
 
     pub fn main_loop(mut self) {
+        #[allow(unused_imports)]
         use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
         let mut current_time = time::Instant::now();
-
+        // Initialize everything that needs to at startup
+        {
+            for i in &mut self.systems {
+                i.as_mut().startup(&mut self.world);
+            }
+        }
         self.event_loop.run(move |event, _, control_flow| {
             //*control_flow = ControlFlow::Wait;
             *control_flow = ControlFlow::Poll;

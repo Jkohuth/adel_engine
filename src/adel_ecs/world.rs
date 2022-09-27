@@ -3,7 +3,6 @@ use std::any::TypeId;
 
 #[allow(unused_imports)]
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 pub trait Component {
     fn component_as_any(&self) -> &dyn std::any::Any;
@@ -88,7 +87,7 @@ impl World {
             }
         }
         let mut new_component: Vec<Option<ComponentType>> = Vec::with_capacity(self.entities_count);
-        
+
         // Populate the new component with None for all entites as it was just created
         for _ in 0..self.entities_count {
             new_component.push(None);
@@ -96,11 +95,17 @@ impl World {
 
         // Add Entity to newly created Component
         new_component[entity] = Some(component);
-  
+
         // Append new Component to the Vector of pointers (Box) stored in world
         self.components.push(Box::new(RefCell::new(new_component)));
     }
-
+    // Creates a function to insert an existing component Vector into World
+    pub fn insert_component<ComponentType: 'static>(&mut self, component: Vec<Option<ComponentType>>) {
+        // All the component Vectors need to be the same length, if we have a mismatched number of entities, fail
+        // Note: Arrays indexed at 0
+        assert_eq!(self.entities_count, (component.len() + 1) );
+        self.components.push(Box::new(RefCell::new(component)));
+    }
     pub fn borrow_component_mut<ComponentType: 'static>(&self) -> Option<RefMut<Vec<Option<ComponentType>>>> {
         for component_vec in self.components.iter() {
             if let Some(component_vec) = component_vec.component_as_any().downcast_ref::<RefCell<Vec<Option<ComponentType>>>>() {

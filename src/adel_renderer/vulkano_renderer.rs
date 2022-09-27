@@ -1,6 +1,7 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
+#[allow(unused_imports)]
 use std::cell::{Ref, RefCell, RefMut};
 use log;
 #[allow(unused_imports)]
@@ -18,8 +19,9 @@ use winit::window::Window;
 
 use crate::adel_camera::Camera;
 
-use crate::adel_renderer::{renderer_utils, FinalImageView};
+use crate::adel_renderer::{renderer_utils};
 
+#[allow(unused_imports)]
 use crate::adel_renderer::{
     VulkanoContext,
     VulkanoWindow,
@@ -89,6 +91,7 @@ impl VulkanoRenderer {
     pub fn vulkano_pipeline_map(&self) -> &HashMap<PipelineType, VulkanoPipeline> {
         &self.pipeline_map
     }
+    /*
     // Requires the model builder components from World and returns a RefCell enclosed Vector where entity value
     // equates to it's position in the vector and if an entity has some value it's
     pub fn create_models(&self, model_builder_vec: &mut RefMut<Vec<Option<ModelComponent>>>) {
@@ -102,9 +105,10 @@ impl VulkanoRenderer {
             }
         }
     }
+    */
 
-
-    pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u16]>>, PushConstantData)>) {
+    //pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, PushConstantData)>) {
+    pub fn render(&mut self, data: Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u32]>>, PushConstantData)>) {
         // TODO: Very much not a fan of passing an Arc<Device> into every call of start frame
         let before_pipeline_future = match self.window.start_frame(self.context.device()) {
             Err(e) => {
@@ -138,9 +142,12 @@ impl VulkanoRenderer {
         for i in data {
             builder
                 .bind_vertex_buffers(0, i.0.clone())
+                // Draw
+                //.push_constants(self.pipeline_map.get(&PipelineType::Model).unwrap().pipeline().layout().clone(), 0, i.1.clone())
+                //.draw(i.0.len() as u32, 1, 0, 0).unwrap();
+                // Draw Indexed
                 .bind_index_buffer(i.1.clone())
                 .push_constants(self.pipeline_map.get(&PipelineType::Model).unwrap().pipeline().layout().clone(), 0, i.2.clone())
-                //.draw(i.0.len() as u32, 1, 0, 0).unwrap();
                 .draw_indexed(i.1.len() as u32, 1, 0, 0, 0).unwrap();
         }
         builder
@@ -164,6 +171,27 @@ impl VulkanoRenderer {
 }
 
 impl System for VulkanoRenderer {
+        fn startup(&mut self, world: &mut World) {
+        let mut model_component_vec: Vec<Option<ModelComponent>> = Vec::new();
+        // Since I can't borrow World both immutable and mutably, I first borrow it immutably,
+        // Use that data to build a new component vector, then when that lifetime has ended
+        // I push it into world mutably
+        {
+            let builders = world.borrow_component::<ModelBuilder>().unwrap();
+            for model_builder in builders.iter().enumerate() {
+                match model_builder.1 {
+                    Some(builder) => {
+                        model_component_vec.push(Some(builder.build(self.context.device())));
+                    }
+                    None => {
+
+                    }
+                }
+
+            }
+        }
+        world.insert_component(model_component_vec);
+    }
     fn run(&mut self, world: &mut World) {
 
         // Need to build the models into Model Components
@@ -172,7 +200,8 @@ impl System for VulkanoRenderer {
         let projection_matrix = camera.get_projection() * camera.get_view();
         let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
-        let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u16]>>, PushConstantData)>::new();
+        let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, Arc<CpuAccessibleBuffer<[u32]>>, PushConstantData)>::new();
+        //let mut data = Vec::<(Arc<CpuAccessibleBuffer<[Vertex]>>, PushConstantData)>::new();
         // Retrive a tuple, (usize, Value)
         for i in model_ref.iter_mut().enumerate() {
             match i.1 {
@@ -183,6 +212,9 @@ impl System for VulkanoRenderer {
                         data.push( (model.vertex_buffer.as_ref().unwrap().clone(), model.index_buffer.as_ref().unwrap().clone(),
                             renderer_utils::create_push_constant_data(projection_matrix.clone(), &transform))
                         );
+                        //data.push( (model.vertex_buffer.as_ref().unwrap().clone(),
+                        //    renderer_utils::create_push_constant_data(projection_matrix.clone(), &transform))
+                        //);
                     }
                 }
                 None => (),
