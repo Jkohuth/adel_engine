@@ -56,7 +56,6 @@ pub fn create_command_buffers(
     render_pass: vk::RenderPass,
     surface_extent: vk::Extent2D,
     vertex_buffer: vk::Buffer,
-    vertices_len: u32
 ) -> Vec<vk::CommandBuffer> {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
         .command_pool(command_pool)
@@ -111,7 +110,7 @@ pub fn create_command_buffers(
 
             device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
 
-            device.cmd_draw(command_buffer, vertices_len, 1, 0, 0);
+            device.cmd_draw(command_buffer, 3, 1, 0, 0);
 
             device.cmd_end_render_pass(command_buffer);
 

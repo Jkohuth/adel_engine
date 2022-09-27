@@ -39,14 +39,14 @@ pub struct VulkanApp {
     // vulkan stuff
     _entry: ash::Entry,
     instance: ash::Instance,
-    surface_loader: ash::extensions::khr::Surface,
-    surface: vk::SurfaceKHR,
+    surface_info: structures::SurfaceInfo,
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
 
     _physical_device: vk::PhysicalDevice,
     device: ash::Device,
 
+    queue_family: structures::QueueFamilyIndices,
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
 
@@ -85,11 +85,11 @@ impl VulkanApp {
         let (debug_utils_loader, debug_messenger) = debug::setup_debug_utils(ENABLE_VALIDATION_LAYERS, &entry, &instance);
         let surface_info = device::create_surface(&entry, &instance, &window);
         let physical_device = device::pick_physical_device(&instance, &surface_info);
-        let (device, family_indices) = device::create_logical_device(&instance, physical_device, &surface_info, &VALIDATION_LAYERS.to_vec());
+        let (device, queue_family) = device::create_logical_device(&instance, physical_device, &surface_info, &VALIDATION_LAYERS.to_vec());
         let graphics_queue =
-            unsafe { device.get_device_queue(family_indices.graphics_family.unwrap(), 0) };
+            unsafe { device.get_device_queue(queue_family.graphics_family.unwrap(), 0) };
         let present_queue =
-            unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
+            unsafe { device.get_device_queue(queue_family.present_family.unwrap(), 0) };
 
         let swapchain_info = swapchain::create_swapchain(
                                 &instance,
@@ -97,7 +97,7 @@ impl VulkanApp {
                                 physical_device,
                                 &window,
                                 &surface_info,
-                                &family_indices);
+                                &queue_family);
         let swapchain_imageviews = pipeline::create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
 
         let render_pass = pipeline::create_render_pass(&device, swapchain_info.swapchain_format);
@@ -106,7 +106,7 @@ impl VulkanApp {
 
         let framebuffers = buffers::create_framebuffers(&device, render_pass.clone(), &swapchain_imageviews, swapchain_info.swapchain_extent);
 
-        let command_pool = buffers::create_command_pool(&device, &family_indices);
+        let command_pool = buffers::create_command_pool(&device, &queue_family);
         let mut vertices_data: Vec<Vertex> = Vec::new();
         for i in VERTICES_DATA {
             vertices_data.push(i);
@@ -120,19 +120,18 @@ impl VulkanApp {
             render_pass,
             swapchain_info.swapchain_extent,
             vertex_buffer,
-            vertices_data.len() as u32,
         );
         let sync_objects = buffers::create_sync_objects(&device, MAX_FRAMES_IN_FLIGHT);
 
         Self {
             _entry: entry,
             instance,
-            surface_loader: surface_info.surface_loader,
-            surface: surface_info.surface,
+            surface_info,
             debug_utils_loader,
             debug_messenger,
             _physical_device: physical_device,
             device,
+            queue_family,
             graphics_queue,
             present_queue,
             swapchain_info,
@@ -216,12 +215,12 @@ impl VulkanApp {
 
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
-/*
+
     fn recreate_swapchain(&mut self) {
         // parameters -------------
         let surface_suff = structures::SurfaceInfo {
-            surface_loader: self.surface_loader.clone(),
-            surface: self.surface,
+            surface_loader: self.surface_info.surface_loader.clone(),
+            surface: self.surface_info.surface,
             screen_width: self.window.inner_size().width,
             screen_height: self.window.inner_size().height,
         };
@@ -234,39 +233,39 @@ impl VulkanApp {
         };
         self.cleanup_swapchain();
 
-        let swapchain_stuff = swapchain::create_swapchain(
+        let swapchain_info = swapchain::create_swapchain(
             &self.instance,
             &self.device,
             self._physical_device,
             &self.window,
-            &surface_suff,
+            &self.surface_info,
             &self.queue_family,
         );
-        self.swapchain_loader = swapchain_stuff.swapchain_loader;
-        self.swapchain = swapchain_stuff.swapchain;
-        self.swapchain_images = swapchain_stuff.swapchain_images;
-        self.swapchain_format = swapchain_stuff.swapchain_format;
-        self.swapchain_extent = swapchain_stuff.swapchain_extent;
+        self.swapchain_info.swapchain_loader = swapchain_info.swapchain_loader;
+        self.swapchain_info.swapchain = swapchain_info.swapchain;
+        self.swapchain_info.swapchain_images = swapchain_info.swapchain_images;
+        self.swapchain_info.swapchain_format = swapchain_info.swapchain_format;
+        self.swapchain_info.swapchain_extent = swapchain_info.swapchain_extent;
 
-        self.swapchain_imageviews = share::v1::create_image_views(
+        self.swapchain_imageviews = pipeline::create_image_views(
             &self.device,
-            self.swapchain_format,
-            &self.swapchain_images,
+            self.swapchain_info.swapchain_format,
+            &self.swapchain_info.swapchain_images,
         );
-        self.render_pass = share::v1::create_render_pass(&self.device, self.swapchain_format);
-        let (graphics_pipeline, pipeline_layout) = VulkanApp::create_graphics_pipeline(
+        self.render_pass = pipeline::create_render_pass(&self.device, self.swapchain_info.swapchain_format);
+        let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(
             &self.device,
             self.render_pass,
-            swapchain_stuff.swapchain_extent,
+            swapchain_info.swapchain_extent,
         );
         self.graphics_pipeline = graphics_pipeline;
         self.pipeline_layout = pipeline_layout;
 
-        self.swapchain_framebuffers = share::v1::create_framebuffers(
+        self.framebuffers = buffers::create_framebuffers(
             &self.device,
             self.render_pass,
             &self.swapchain_imageviews,
-            self.swapchain_extent,
+            self.swapchain_info.swapchain_extent,
         );
         self.command_buffers = buffers::create_command_buffers(
             &self.device,
@@ -274,7 +273,8 @@ impl VulkanApp {
             self.graphics_pipeline,
             &self.framebuffers,
             self.render_pass,
-            self.swapchain_extent,
+            self.swapchain_info.swapchain_extent,
+            self.vertex_buffer,
         );
     }
 
@@ -282,9 +282,10 @@ impl VulkanApp {
         unsafe {
             self.device
                 .free_command_buffers(self.command_pool, &self.command_buffers);
-            for &framebuffer in self.swapchain_framebuffers.iter() {
+            for &framebuffer in self.framebuffers.iter() {
                 self.device.destroy_framebuffer(framebuffer, None);
             }
+            // TODO: Pipeline doesn't need to be destroyed during swapchain recreation
             self.device.destroy_pipeline(self.graphics_pipeline, None);
             self.device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
@@ -292,10 +293,11 @@ impl VulkanApp {
             for &image_view in self.swapchain_imageviews.iter() {
                 self.device.destroy_image_view(image_view, None);
             }
-            self.swapchain_loader
-                .destroy_swapchain(self.swapchain, None);
+            self.swapchain_info.swapchain_loader
+                .destroy_swapchain(self.swapchain_info.swapchain, None);
         }
-    }*/
+    }
+
     pub fn main_loop(mut self, event_loop: EventLoop<()>) {
 
         event_loop.run(move |event, _, control_flow| {
@@ -351,27 +353,15 @@ impl Drop for VulkanApp {
                 self.device.destroy_fence(self.in_flight_fences[i], None);
             }
 
-            self.device.destroy_command_pool(self.command_pool, None);
+            self.cleanup_swapchain();
 
-            for &framebuffer in self.framebuffers.iter() {
-                self.device.destroy_framebuffer(framebuffer, None);
-            }
-
-            self.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device
-                .destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device.destroy_render_pass(self.render_pass, None);
-
-            for &imageview in self.swapchain_imageviews.iter() {
-                self.device.destroy_image_view(imageview, None);
-            }
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.free_memory(self.vertex_buffer_memory, None);
 
-            self.swapchain_info.swapchain_loader
-                .destroy_swapchain(self.swapchain_info.swapchain, None);
+            self.device.destroy_command_pool(self.command_pool, None);
+
             self.device.destroy_device(None);
-            self.surface_loader.destroy_surface(self.surface, None);
+            self.surface_info.surface_loader.destroy_surface(self.surface_info.surface, None);
 
             if ENABLE_VALIDATION_LAYERS {
                 self.debug_utils_loader
