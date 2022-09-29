@@ -4,20 +4,20 @@ use ash::vk;
 //use winit::event_loop::{EventLoop, ControlFlow};
 
 use log;
-use std::ffi::{CString};
 use crate::adel_renderer_vulkan::utility::structures::Vertex;
+use nalgebra::{Vector2, Vector3};
 const VERTICES_DATA: [Vertex; 3] = [
     Vertex {
-        position: [0.0, -0.5],
-        color: [1.0, 0.0, 0.0],
+        position: Vector2::new(0.0, -0.5),
+        color: Vector3::new(1.0, 0.0, 0.0),
     },
     Vertex {
-        position: [0.5, 0.5],
-        color: [0.0, 1.0, 0.0],
+        position: Vector2::new(0.5, 0.5),
+        color: Vector3::new(0.0, 1.0, 0.0),
     },
     Vertex {
-        position: [-0.5, 0.5],
-        color: [0.0, 0.0, 1.0],
+        position: Vector2::new(-0.5, 0.5),
+        color: Vector3::new(0.0, 0.0, 1.0),
     },
 ];
 // TODO: Create a prelude and add these to it
@@ -71,6 +71,8 @@ pub struct VulkanApp {
     window: winit::window::Window,
 
     is_framebuffer_resized: bool,
+
+    push_const: structures::PushConstantData,
 }
 
 impl VulkanApp {
@@ -114,6 +116,12 @@ impl VulkanApp {
             vertices_data.push(i);
         }
         let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&instance, &device, physical_device, &vertices_data);
+        use nalgebra;
+        let push_const = structures::PushConstantData {
+            transform: nalgebra::Matrix4::identity(),
+            color: nalgebra::Vector3::new(1.0, 0.0, 0.0),
+        };
+        log::info!("JAKOB push_const {:?}", &push_const);
         let command_buffers = buffers::create_command_buffers(
             &device,
             command_pool,
@@ -122,6 +130,8 @@ impl VulkanApp {
             render_pass,
             swapchain_info.swapchain_extent,
             vertex_buffer,
+            &push_const,
+            pipeline_layout.clone()
         );
         let sync_objects = buffers::create_sync_objects(&device, MAX_FRAMES_IN_FLIGHT);
 
@@ -152,6 +162,8 @@ impl VulkanApp {
             current_frame: 0,
             window,
             is_framebuffer_resized: false,
+
+            push_const
         }
 
     }
@@ -292,6 +304,8 @@ impl VulkanApp {
             self.render_pass,
             self.swapchain_info.swapchain_extent,
             self.vertex_buffer,
+            &self.push_const,
+            self.pipeline_layout.clone(),
         );
     }
 

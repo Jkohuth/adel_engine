@@ -56,6 +56,8 @@ pub fn create_command_buffers(
     render_pass: vk::RenderPass,
     surface_extent: vk::Extent2D,
     vertex_buffer: vk::Buffer,
+    push_constant_data: &structures::PushConstantData,
+    layout: vk::PipelineLayout,
 ) -> Vec<vk::CommandBuffer> {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
         .command_pool(command_pool)
@@ -112,6 +114,7 @@ pub fn create_command_buffers(
 
 
         unsafe {
+            let push_data = structures::as_bytes(push_constant_data);
             device.cmd_begin_render_pass(
                 command_buffer,
                 &render_pass_begin_info,
@@ -127,6 +130,7 @@ pub fn create_command_buffers(
             device.cmd_set_viewport(command_buffer, 0, &viewport);
             device.cmd_set_scissor(command_buffer, 0, &scissors);
             device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+            device.cmd_push_constants(command_buffer, layout, vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT, 0, &push_data);
 
             device.cmd_draw(command_buffer, 3, 1, 0, 0);
 
@@ -187,7 +191,8 @@ pub fn record_command_buffers(
                 vk::PipelineBindPoint::GRAPHICS,
                 graphics_pipeline,
             );
-            log::info!("JAKOB this is where the error occurs");
+
+
             device.cmd_draw(command_buffer, 3, 1, 0, 0);
 
             device.cmd_end_render_pass(command_buffer);

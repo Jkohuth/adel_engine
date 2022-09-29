@@ -2,7 +2,7 @@ use ash::vk;
 use std::ffi::CString;
 use inline_spirv::include_spirv;
 
-use super::structures::Vertex;
+use super::structures::{PushConstantData, Vertex};
 
 pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format) -> vk::RenderPass {
     let color_attachment = vk::AttachmentDescription::builder()
@@ -123,8 +123,10 @@ pub fn create_graphics_pipeline(
 ) -> (vk::Pipeline, vk::PipelineLayout) {
 
     // Create Shader Modules
-    let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_vulkan/shaders/triangle.vert", vert, glsl, entry="main");
-    let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_vulkan/shaders/triangle.frag", frag, glsl, entry="main");
+    //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_vulkan/shaders/triangle.vert", vert, glsl, entry="main");
+    //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_vulkan/shaders/triangle.frag", frag, glsl, entry="main");
+    let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_vulkan/shaders/push.vert", vert, glsl, entry="main");
+    let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_vulkan/shaders/push.frag", frag, glsl, entry="main");
     let vert_shader = create_shader_module(&device, vert_spv);
     let frag_shader = create_shader_module(&device, frag_spv);
 
@@ -255,11 +257,18 @@ pub fn create_graphics_pipeline(
         .attachments(&color_blend_attachment_states)
         .blend_constants([0.0, 0.0, 0.0, 0.0])
         .build();
-    let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder().build();
 
     let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
     let pipeline_dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
         .dynamic_states(&dynamic_state)
+        .build();
+    let push_constant_range = [vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+        .offset(0)
+        .size(std::mem::size_of::<PushConstantData>() as u32)
+        .build()];
+    let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
+        .push_constant_ranges(&push_constant_range)
         .build();
 
     let pipeline_layout = unsafe {

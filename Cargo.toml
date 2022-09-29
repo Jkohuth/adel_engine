@@ -26,6 +26,7 @@ png = "0.17"
 bytemuck = { version = "1.7", features = ["derive", "extern_crate_std", "min_const_generics"] }
 tobj = "3.2.3"
 nalgebra = "0.31.0"
+#nalgebra-glm = "0.17.0"
 num = "0.4.0"
 
 [[bin]]

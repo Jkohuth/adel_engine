@@ -48,7 +48,21 @@ pub struct SyncObjects {
     pub render_finished_semaphores: Vec<vk::Semaphore>,
     pub inflight_fences: Vec<vk::Fence>,
 }
+use nalgebra;
+#[repr(C)]
 pub struct Vertex {
-    pub position: [f32; 2],
-    pub color: [f32; 3]
+    pub position: nalgebra::Vector2::<f32>,
+    pub color: nalgebra::Vector3::<f32>,
+}
+#[repr(C)]
+#[derive(Debug)]
+pub struct PushConstantData {
+    pub transform: nalgebra::Matrix4<f32>,
+    pub color: nalgebra::Vector3<f32>
+}
+pub unsafe fn as_bytes<T: Sized>(p: &T) -> &[u8] {
+    ::std::slice::from_raw_parts(
+        (p as *const T) as *const u8,
+        std::mem::size_of::<T>()
+    )
 }
