@@ -6,6 +6,9 @@ use ash::vk;
 use log;
 use crate::adel_renderer_vulkan::utility::structures::Vertex;
 use nalgebra::{Vector2, Vector3};
+use nalgebra;
+
+use crate::adel_ecs::{System, World};
 const VERTICES_DATA: [Vertex; 3] = [
     Vertex {
         position: Vector2::new(0.0, -0.5),
@@ -23,40 +26,30 @@ const VERTICES_DATA: [Vertex; 3] = [
 // TODO: Create a prelude and add these to it
 use crate::adel_renderer_vulkan::utility::{
     constants::*,
-    debug,
     platforms,
     structures,
     tools,
-    swapchain,
-    device,
-    pipeline,
+    swapchain::AshSwapchain,
+    context::{AshContext, create_logical_device},
+    pipeline::AshPipeline,
     buffers,
 };
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
+use winit::window::Window;
 
-pub struct VulkanApp {
+const NAME: &'static str = "Renderer";
+
+// May have to invert the order here, as the values of structs are dropped in the order they are declared
+pub struct RendererAsh {
     // vulkan stuff
     _entry: ash::Entry,
-    instance: ash::Instance,
-    surface_info: structures::SurfaceInfo,
-    debug_utils_loader: ash::extensions::ext::DebugUtils,
-    debug_messenger: vk::DebugUtilsMessengerEXT,
+    context: AshContext,
+    pub device: ash::Device,
 
-    _physical_device: vk::PhysicalDevice,
-    device: ash::Device,
+    swapchain: AshSwapchain,
 
-    queue_family: structures::QueueFamilyIndices,
-    graphics_queue: vk::Queue,
-    present_queue: vk::Queue,
-
-    swapchain_info: structures::SwapChainInfo,
-    swapchain_imageviews: Vec<vk::ImageView>,
-
-    render_pass: vk::RenderPass,
-    graphics_pipeline: vk::Pipeline,
-    pipeline_layout: vk::PipelineLayout,
-
+    pipeline: AshPipeline,
     framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
@@ -68,45 +61,23 @@ pub struct VulkanApp {
     render_finished_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>,
     current_frame: usize,
-    window: winit::window::Window,
 
     is_framebuffer_resized: bool,
 
     push_const: structures::PushConstantData,
+    pub window: Window,
+
+    name: &'static str,
 }
 
-impl VulkanApp {
-    pub fn new(event_loop: &winit::event_loop::EventLoop<()>) -> Self {
-        let window = winit::window::WindowBuilder::new()
-            .with_title("Test Window")
-            .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
-            .build(event_loop)
-            .expect("Failed: Create window");
-
+impl RendererAsh {
+    pub fn new(window: Window) -> Self {
         // init vulkan stuff
         let entry = unsafe { ash::Entry::load().expect("Error: Failed to create Ash Entry") };
-        let instance = device::create_instance(&entry, ENABLE_VALIDATION_LAYERS, &VALIDATION_LAYERS.to_vec());
-        let (debug_utils_loader, debug_messenger) = debug::setup_debug_utils(ENABLE_VALIDATION_LAYERS, &entry, &instance);
-        let surface_info = device::create_surface(&entry, &instance, &window);
-        let physical_device = device::pick_physical_device(&instance, &surface_info);
-        let (device, queue_family) = device::create_logical_device(&instance, physical_device, &surface_info, &VALIDATION_LAYERS.to_vec());
-        let graphics_queue =
-            unsafe { device.get_device_queue(queue_family.graphics_family.unwrap(), 0) };
-        let present_queue =
-            unsafe { device.get_device_queue(queue_family.present_family.unwrap(), 0) };
-
-        let swapchain_info = swapchain::create_swapchain(
-                                &instance,
-                                &device,
-                                physical_device,
-                                &window,
-                                &surface_info,
-                                &queue_family);
-        let swapchain_imageviews = pipeline::create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
-
-        let render_pass = pipeline::create_render_pass(&device, swapchain_info.swapchain_format);
-
-        let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(&device, render_pass.clone(), swapchain_info.swapchain_extent);
+        let context = AshContext::new(&entry, &window);
+        let device = create_logical_device(&context, &VALIDATION_LAYERS.to_vec());
+        let swapchain = AshSwapchain::new(&context, &device, &window);
+        let pipeline = AshPipeline::new(&device, swapchain.format(), swapchain.extent());
 
         let framebuffers = buffers::create_framebuffers(&device, render_pass.clone(), &swapchain_imageviews, swapchain_info.swapchain_extent);
 
@@ -116,13 +87,11 @@ impl VulkanApp {
             vertices_data.push(i);
         }
         let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&instance, &device, physical_device, &vertices_data);
-        use nalgebra;
         let push_const = structures::PushConstantData {
             transform: nalgebra::Matrix4::identity(),
             color: nalgebra::Vector3::new(1.0, 0.0, 0.0),
         };
-        log::info!("JAKOB push_const {:?}", &push_const);
-        let command_buffers = buffers::create_command_buffers(
+        let command_buffers = buffers::create_command_buffers_(
             &device,
             command_pool,
             graphics_pipeline,
@@ -137,20 +106,10 @@ impl VulkanApp {
 
         Self {
             _entry: entry,
-            instance,
-            surface_info,
-            debug_utils_loader,
-            debug_messenger,
-            _physical_device: physical_device,
+            context,
             device,
-            queue_family,
-            graphics_queue,
-            present_queue,
-            swapchain_info,
-            swapchain_imageviews,
-            render_pass,
-            graphics_pipeline,
-            pipeline_layout,
+            swapchain,
+            pipeline,
             framebuffers,
             command_pool,
             command_buffers,
@@ -160,18 +119,19 @@ impl VulkanApp {
             render_finished_semaphores: sync_objects.render_finished_semaphores,
             in_flight_fences: sync_objects.inflight_fences,
             current_frame: 0,
-            window,
             is_framebuffer_resized: false,
 
-            push_const
+            push_const,
+            window,
+            name: NAME,
         }
 
     }
 
 }
 
-impl VulkanApp {
-    fn draw_frame(&mut self) {
+impl RendererAsh {
+    pub fn draw_frame(&mut self) {
         let wait_fences = [self.in_flight_fences[self.current_frame]];
 
         unsafe {
@@ -296,7 +256,7 @@ impl VulkanApp {
             &self.swapchain_imageviews,
             self.swapchain_info.swapchain_extent,
         );
-        self.command_buffers = buffers::create_command_buffers(
+        self.command_buffers = buffers::create_command_buffers_(
             &self.device,
             self.command_pool,
             self.graphics_pipeline.clone(),
@@ -325,51 +285,15 @@ impl VulkanApp {
         }
     }
 
-    pub fn main_loop(mut self, event_loop: EventLoop<()>) {
-
-        event_loop.run(move |event, _, control_flow| {
-
-            match event {
-                | Event::WindowEvent { event, .. } => {
-                    match event {
-                        | WindowEvent::CloseRequested => {
-                            *control_flow = ControlFlow::Exit
-                        },
-                        | WindowEvent::KeyboardInput { input, .. } => {
-                            match input {
-                                | KeyboardInput { virtual_keycode, state, .. } => {
-                                    match (virtual_keycode, state) {
-                                        | (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                            *control_flow = ControlFlow::Exit
-                                        },
-                                        | _ => {},
-                                    }
-                                },
-                            }
-                        },
-                        | _ => {},
-                    }
-                },
-                | Event::MainEventsCleared => {
-                    self.window.request_redraw();
-                },
-                | Event::RedrawRequested(_window_id) => {
-                    self.draw_frame();
-                },
-                | Event::LoopDestroyed => {
-                    unsafe {
-                        self.device.device_wait_idle()
-                            .expect("Failed to wait device idle!")
-                    };
-                },
-                _ => (),
-            }
-
-        })
-    }
 }
 
-impl Drop for VulkanApp {
+impl System for RendererAsh {
+    fn startup(&mut self, world: &mut World) {}
+    fn run(&mut self, world: &mut World) {}
+    fn name(&self) -> &'static str { self.name }
+}
+
+impl Drop for RendererAsh {
     fn drop(&mut self) {
         unsafe {
             for i in 0..MAX_FRAMES_IN_FLIGHT {
@@ -381,9 +305,9 @@ impl Drop for VulkanApp {
             }
 
             self.cleanup_swapchain();
-            self.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device
-                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.swapchain.destroy_swapchain(&self.device);
+            self.pipeline.destroy_render_pass(&self.device);
+            self.pipeline.destroy_pipeline(&self.device);
 
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.free_memory(self.vertex_buffer_memory, None);
@@ -391,13 +315,7 @@ impl Drop for VulkanApp {
             self.device.destroy_command_pool(self.command_pool, None);
 
             self.device.destroy_device(None);
-            self.surface_info.surface_loader.destroy_surface(self.surface_info.surface, None);
-
-            if ENABLE_VALIDATION_LAYERS {
-                self.debug_utils_loader
-                    .destroy_debug_utils_messenger(self.debug_messenger, None);
-            }
-            self.instance.destroy_instance(None);
+            self.context.cleanup_context();
         }
     }
 }

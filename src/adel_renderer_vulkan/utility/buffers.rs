@@ -47,8 +47,28 @@ pub fn create_command_pool(
             .expect("Failed to create Command Pool!")
     }
 }
-
+use super::constants::MAX_FRAMES_IN_FLIGHT;
 pub fn create_command_buffers(
+    device: &ash::Device,
+    command_pool: vk::CommandPool,
+) -> Vec<vk::CommandBuffer> {
+    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+        .command_pool(command_pool)
+        .command_buffer_count(MAX_FRAMES_IN_FLIGHT as u32)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .build();
+
+    unsafe {
+        device
+            .allocate_command_buffers(&command_buffer_allocate_info)
+            .expect("Failed to allocate Command Buffers!")
+    }
+}
+
+pub fn begin_frame() {
+
+}
+pub fn create_command_buffers_(
     device: &ash::Device,
     command_pool: vk::CommandPool,
     graphics_pipeline: vk::Pipeline,
@@ -144,7 +164,7 @@ pub fn create_command_buffers(
     command_buffers
 
 }
-pub fn record_command_buffers(
+pub fn _record_command_buffers(
     device: &ash::Device,
     command_buffers: &Vec<vk::CommandBuffer>,
     render_pass: vk::RenderPass,
