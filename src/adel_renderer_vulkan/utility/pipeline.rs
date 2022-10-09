@@ -281,10 +281,24 @@ impl AshPipeline {
 
         (graphics_pipelines[0], pipeline_layout)
     }
-    pub fn destroy_render_pass(&mut self, device: &ash::Device) {
+    pub fn recreate_render_pass(&mut self, device: &ash::Device, format: vk::Format) {
+        let render_pass = AshPipeline::create_render_pass(&device, format);
+        self.render_pass = render_pass;
+    }
+
+    pub fn render_pass(&self) -> vk::RenderPass {
+        self.render_pass
+    }
+    pub fn graphics_pipeline(&self) -> vk::Pipeline {
+        self.graphics_pipeline
+    }
+    pub fn pipeline_layout(&self) -> vk::PipelineLayout {
+        self.pipeline_layout
+    }
+    pub unsafe fn destroy_render_pass(&mut self, device: &ash::Device) {
         device.destroy_render_pass(self.render_pass, None);
     }
-    pub fn destroy_pipeline(&mut self, device: &ash::Device) {
+    pub unsafe fn destroy_pipeline(&mut self, device: &ash::Device) {
         device.destroy_pipeline(self.graphics_pipeline, None);
         device
             .destroy_pipeline_layout(self.pipeline_layout, None);

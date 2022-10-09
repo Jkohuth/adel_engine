@@ -30,11 +30,6 @@ impl QueueFamilyIndices {
         self.graphics_family.is_some() && self.present_family.is_some()
     }
 }
-pub struct SyncObjects {
-    pub image_available_semaphores: Vec<vk::Semaphore>,
-    pub render_finished_semaphores: Vec<vk::Semaphore>,
-    pub inflight_fences: Vec<vk::Fence>,
-}
 use nalgebra;
 #[repr(C)]
 pub struct Vertex {

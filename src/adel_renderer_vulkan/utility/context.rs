@@ -287,7 +287,7 @@ impl AshContext {
     }
     // Other structs require device to cleanup resources properly, I'm providing a cleanup function
     // here in order to properly remove it in the drop function
-    pub fn cleanup_context(&mut self) {
+    pub unsafe fn destroy_context(&mut self) {
             self.surface_info.surface_loader.destroy_surface(self.surface_info.surface, None);
 
             if ENABLE_VALIDATION_LAYERS {
@@ -297,6 +297,9 @@ impl AshContext {
             self.instance.destroy_instance(None);
     }
 
+    pub fn instance(&self) -> &ash::Instance {
+        &self.instance
+    }
 }
 
 // Since Device is used frequently in function calls, I'm going to keep this value stored top level

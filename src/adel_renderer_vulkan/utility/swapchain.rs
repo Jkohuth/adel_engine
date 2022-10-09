@@ -2,6 +2,7 @@ use ash::vk;
 use winit::window::Window;
 use log;
 use super::structures;
+use super::structures::SurfaceInfo;
 use super::context::AshContext;
 
 pub struct AshSwapchain {
@@ -94,37 +95,12 @@ impl AshSwapchain {
         }
     }
 
-    fn query_swapchain_support(
-        context: &AshContext
-    ) -> SwapChainSupportDetail {
-        unsafe {
-            let capabilities = context.surface_info
-                .surface_loader
-                .get_physical_device_surface_capabilities(context.physical_device, context.surface_info.surface)
-                .expect("Failed to query for surface capabilities.");
-            let formats = context.surface_info
-                .surface_loader
-                .get_physical_device_surface_formats(context.physical_device, context.surface_info.surface)
-                .expect("Failed to query for surface formats.");
-            let present_modes = context.surface_info
-                .surface_loader
-                .get_physical_device_surface_present_modes(context.physical_device, context.surface_info.surface)
-                .expect("Failed to query for surface present mode.");
-
-            SwapChainSupportDetail {
-                capabilities,
-                formats,
-                present_modes,
-            }
-        }
-    }
-
-    fn create_swapchain(
+    pub fn create_swapchain(
         context: &AshContext,
         device: &ash::Device,
         window: &winit::window::Window,
     ) -> SwapChainInfo {
-        let swapchain_support = AshSwapchain::query_swapchain_support(context);
+        let swapchain_support = query_swapchain_support(context.physical_device, &context.surface_info);
 
         let surface_format = AshSwapchain::choose_swapchain_format(&swapchain_support.formats);
         let present_mode = AshSwapchain::choose_swapchain_present_mode(&swapchain_support.present_modes);
@@ -235,7 +211,15 @@ impl AshSwapchain {
                 .expect("Failed to create Image View!")
         }
     }
-    pub fn destroy_swapchain(&mut self, device: &ash::Device) {
+
+    pub fn recreate_swapchain(&mut self, context: &AshContext, device: &ash::Device, window: &Window) {
+        let swapchain_info = AshSwapchain::create_swapchain(context, device, window);
+        let image_views = AshSwapchain::create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
+        self.swapchain_info = swapchain_info;
+        self.image_views = image_views;
+    }
+
+    pub unsafe fn destroy_swapchain(&mut self, device: &ash::Device) {
         for &image_view in self.image_views.iter() {
             device.destroy_image_view(image_view, None);
         }
@@ -254,10 +238,40 @@ impl AshSwapchain {
     pub fn swapchain(&self) -> vk::SwapchainKHR {
         self.swapchain_info.swapchain
     }
-    pub fn swapchain_loader(&self) -> ash::extensions::khr::Swapchain {
-        self.swapchain_info.swapchain_loader
+    pub fn swapchain_loader(&self) -> &ash::extensions::khr::Swapchain {
+        &self.swapchain_info.swapchain_loader
+    }
+    pub fn image_views(&self) -> &Vec<vk::ImageView> {
+        &self.image_views
     }
 }
+
+pub fn query_swapchain_support(
+    physical_device: vk::PhysicalDevice,
+    surface_info: &SurfaceInfo,
+) -> SwapChainSupportDetail {
+    unsafe {
+        let capabilities = surface_info
+            .surface_loader
+            .get_physical_device_surface_capabilities(physical_device, surface_info.surface)
+            .expect("Failed to query for surface capabilities.");
+        let formats = surface_info
+            .surface_loader
+            .get_physical_device_surface_formats(physical_device, surface_info.surface)
+            .expect("Failed to query for surface formats.");
+        let present_modes = surface_info
+            .surface_loader
+            .get_physical_device_surface_present_modes(physical_device, surface_info.surface)
+            .expect("Failed to query for surface present mode.");
+
+        SwapChainSupportDetail {
+            capabilities,
+            formats,
+            present_modes,
+        }
+    }
+}
+
 
 pub struct SwapChainInfo {
     pub swapchain_loader: ash::extensions::khr::Swapchain,

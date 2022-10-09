@@ -32,7 +32,9 @@ use crate::adel_renderer_vulkan::utility::{
     swapchain::AshSwapchain,
     context::{AshContext, create_logical_device},
     pipeline::AshPipeline,
+    buffers::AshBuffers,
     buffers,
+    sync::SyncObjects,
 };
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{EventLoop, ControlFlow};
@@ -50,16 +52,12 @@ pub struct RendererAsh {
     swapchain: AshSwapchain,
 
     pipeline: AshPipeline,
-    framebuffers: Vec<vk::Framebuffer>,
-    command_pool: vk::CommandPool,
-    command_buffers: Vec<vk::CommandBuffer>,
-
+    buffers: AshBuffers,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
 
-    image_available_semaphores: Vec<vk::Semaphore>,
-    render_finished_semaphores: Vec<vk::Semaphore>,
-    in_flight_fences: Vec<vk::Fence>,
+    sync_objects: SyncObjects,
+
     current_frame: usize,
 
     is_framebuffer_resized: bool,
@@ -78,15 +76,13 @@ impl RendererAsh {
         let device = create_logical_device(&context, &VALIDATION_LAYERS.to_vec());
         let swapchain = AshSwapchain::new(&context, &device, &window);
         let pipeline = AshPipeline::new(&device, swapchain.format(), swapchain.extent());
+        let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline);
 
-        let framebuffers = buffers::create_framebuffers(&device, render_pass.clone(), &swapchain_imageviews, swapchain_info.swapchain_extent);
-
-        let command_pool = buffers::create_command_pool(&device, &queue_family);
         let mut vertices_data: Vec<Vertex> = Vec::new();
         for i in VERTICES_DATA {
             vertices_data.push(i);
         }
-        let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&instance, &device, physical_device, &vertices_data);
+        /*let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&instance, &device, physical_device, &vertices_data);
         let push_const = structures::PushConstantData {
             transform: nalgebra::Matrix4::identity(),
             color: nalgebra::Vector3::new(1.0, 0.0, 0.0),
@@ -102,7 +98,14 @@ impl RendererAsh {
             &push_const,
             pipeline_layout.clone()
         );
-        let sync_objects = buffers::create_sync_objects(&device, MAX_FRAMES_IN_FLIGHT);
+        */
+        let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&context.instance(), &device, context.physical_device, &vertices_data);
+        let push_const = structures::PushConstantData {
+            transform: nalgebra::Matrix4::identity(),
+            color: nalgebra::Vector3::new(1.0, 0.0, 0.0),
+        };
+
+        let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT);
 
         Self {
             _entry: entry,
@@ -110,14 +113,10 @@ impl RendererAsh {
             device,
             swapchain,
             pipeline,
-            framebuffers,
-            command_pool,
-            command_buffers,
+            buffers,
             vertex_buffer,
             vertex_buffer_memory,
-            image_available_semaphores: sync_objects.image_available_semaphores,
-            render_finished_semaphores: sync_objects.render_finished_semaphores,
-            in_flight_fences: sync_objects.inflight_fences,
+            sync_objects,
             current_frame: 0,
             is_framebuffer_resized: false,
 
@@ -132,7 +131,7 @@ impl RendererAsh {
 
 impl RendererAsh {
     pub fn draw_frame(&mut self) {
-        let wait_fences = [self.in_flight_fences[self.current_frame]];
+        /*let wait_fences = [self.in_flight_fences[self.current_frame]];
 
         unsafe {
             self.device
@@ -209,14 +208,14 @@ impl RendererAsh {
             self.recreate_swapchain();
         }
 
-        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;*/
     }
 
     fn recreate_swapchain(&mut self) {
         // parameters -------------
         let surface_info = structures::SurfaceInfo {
-            surface_loader: self.surface_info.surface_loader.clone(),
-            surface: self.surface_info.surface,
+            surface_loader: self.context.surface_info.surface_loader.clone(),
+            surface: self.context.surface_info.surface,
             screen_width: self.window.inner_size().width,
             screen_height: self.window.inner_size().height,
         };
@@ -227,61 +226,30 @@ impl RendererAsh {
                 .device_wait_idle()
                 .expect("Failed to wait device idle!")
         };
-        self.cleanup_swapchain();
+        // TODO: Create proper cleanup function
+        self.destroy_swapchain_resources();
 
-        let swapchain_info = swapchain::create_swapchain(
-            &self.instance,
+        self.swapchain.recreate_swapchain(
+            &self.context,
             &self.device,
-            self._physical_device,
             &self.window,
-            &surface_info,
-            &self.queue_family,
         );
-        self.swapchain_info.swapchain_loader = swapchain_info.swapchain_loader;
-        self.swapchain_info.swapchain = swapchain_info.swapchain;
-        self.swapchain_info.swapchain_images = swapchain_info.swapchain_images;
-        self.swapchain_info.swapchain_format = swapchain_info.swapchain_format;
-        self.swapchain_info.swapchain_extent = swapchain_info.swapchain_extent;
 
-        self.swapchain_imageviews = pipeline::create_image_views(
+        self.pipeline.recreate_render_pass(&self.device, self.swapchain.swapchain_info.swapchain_format);
+        self.buffers.recreate_framebuffers(
             &self.device,
-            self.swapchain_info.swapchain_format,
-            &self.swapchain_info.swapchain_images,
+            self.pipeline.render_pass().clone(),
+            &self.swapchain.image_views(),
+            self.swapchain.extent(),
         );
-        self.render_pass = pipeline::create_render_pass(&self.device, self.swapchain_info.swapchain_format);
-
-        self.framebuffers = buffers::create_framebuffers(
-            &self.device,
-            self.render_pass,
-            &self.swapchain_imageviews,
-            self.swapchain_info.swapchain_extent,
-        );
-        self.command_buffers = buffers::create_command_buffers_(
-            &self.device,
-            self.command_pool,
-            self.graphics_pipeline.clone(),
-            &self.framebuffers,
-            self.render_pass,
-            self.swapchain_info.swapchain_extent,
-            self.vertex_buffer,
-            &self.push_const,
-            self.pipeline_layout.clone(),
-        );
+        // NOTE: sync_objects may need to be recreated if the total number of frames changed
     }
 
-    fn cleanup_swapchain(&self) {
+    fn destroy_swapchain_resources(&mut self) {
         unsafe {
-            self.device
-                .free_command_buffers(self.command_pool, &self.command_buffers);
-            for &framebuffer in self.framebuffers.iter() {
-                self.device.destroy_framebuffer(framebuffer, None);
-            }
-            self.device.destroy_render_pass(self.render_pass, None);
-            for &image_view in self.swapchain_imageviews.iter() {
-                self.device.destroy_image_view(image_view, None);
-            }
-            self.swapchain_info.swapchain_loader
-                .destroy_swapchain(self.swapchain_info.swapchain, None);
+            self.swapchain.destroy_swapchain(&self.device);
+            self.pipeline.destroy_render_pass(&self.device);
+            self.buffers.destroy_framebuffers(&self.device);
         }
     }
 
@@ -296,26 +264,27 @@ impl System for RendererAsh {
 impl Drop for RendererAsh {
     fn drop(&mut self) {
         unsafe {
-            for i in 0..MAX_FRAMES_IN_FLIGHT {
-                self.device
-                    .destroy_semaphore(self.image_available_semaphores[i], None);
-                self.device
-                    .destroy_semaphore(self.render_finished_semaphores[i], None);
-                self.device.destroy_fence(self.in_flight_fences[i], None);
-            }
+            // Destroys Fences and Semaphores
+            self.sync_objects.cleanup_sync_objects(&self.device, MAX_FRAMES_IN_FLIGHT);
 
-            self.cleanup_swapchain();
+            // Framebuffers, Commandbuffers, and CommandPool need cleanup
+            // Framebuffers need to be separated as they are removed when recreating swapchain
+            self.buffers.destroy_framebuffers(&self.device);
+            self.buffers.free_command_buffers(&self.device);
+            self.buffers.destroy_command_pool(&self.device);
+
+            // Destorys Swapchain and ImageViews
             self.swapchain.destroy_swapchain(&self.device);
             self.pipeline.destroy_render_pass(&self.device);
+
+            // Destroys Pipeline and PipelineLayout
             self.pipeline.destroy_pipeline(&self.device);
 
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.free_memory(self.vertex_buffer_memory, None);
 
-            self.device.destroy_command_pool(self.command_pool, None);
-
             self.device.destroy_device(None);
-            self.context.cleanup_context();
+            self.context.destroy_context();
         }
     }
 }

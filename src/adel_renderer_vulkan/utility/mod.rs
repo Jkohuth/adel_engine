@@ -7,3 +7,4 @@ pub mod context;
 pub mod swapchain;
 pub mod pipeline;
 pub mod buffers;
+pub mod sync;
