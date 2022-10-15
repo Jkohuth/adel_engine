@@ -102,7 +102,7 @@ impl RendererAsh {
         let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&context.instance(), &device, context.physical_device, &vertices_data);
         let push_const = structures::PushConstantData {
             transform: nalgebra::Matrix4::identity(),
-            color: nalgebra::Vector3::new(1.0, 0.0, 0.0),
+            color: nalgebra::Vector3::new(1.0, 1.0, 1.0),
         };
 
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT);
@@ -131,7 +131,15 @@ impl RendererAsh {
 
 impl RendererAsh {
     pub fn draw_frame(&mut self) {
-        /*let wait_fences = [self.in_flight_fences[self.current_frame]];
+        // There is a discrepency between the number of frames permitted in flight and the size of the
+        // the swapchain views/framebuffers. Those two can be of different sizes but there should only be two
+        // command buffers at the same time. Figure out what is required for image_index and what for self.current_frame
+
+        // Also fix your graphics card drivers it's a solid 10 seconds to check if each run is successful
+        // beginFrame, acquire commandBuffer
+
+        // Wait for the fences to clear prior to beginning the next render
+        let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
 
         unsafe {
             self.device
@@ -139,11 +147,12 @@ impl RendererAsh {
                 .expect("Failed to wait for Fence!");
         }
 
+        // Acquire the next image in the swapchain
         let (image_index, _is_sub_optimal) = unsafe {
-            let result = self.swapchain_info.swapchain_loader.acquire_next_image(
-                self.swapchain_info.swapchain,
+            let result = self.swapchain.swapchain_loader().acquire_next_image(
+                self.swapchain.swapchain(),
                 std::u64::MAX,
-                self.image_available_semaphores[self.current_frame],
+                self.sync_objects.image_available_semaphores[self.current_frame],
                 vk::Fence::null(),
             );
             match result {
@@ -157,15 +166,115 @@ impl RendererAsh {
                 },
             }
         };
+        // Set isFrameStarted to true
+        // Get the command buffer from the vector that is equal to the current frame
+        let command_buffer = self.buffers.commandbuffers()[self.current_frame];
+        let begin_info = vk::CommandBufferBeginInfo::default();
 
-        let wait_semaphores = [self.image_available_semaphores[self.current_frame]];
+        unsafe {
+            self.device.
+                begin_command_buffer(command_buffer, &begin_info)
+                .expect("ERROR: Failed to begin command buffer");
+        }
+
+        // BeginSwapcahinRenderPass
+        let clear_values = [
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.1, 0.1, 0.1, 0.0],
+                },
+            },
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            },
+        ];
+        // Messy but it functions
+        let render_area = vk::Rect2D {
+            offset: vk::Offset2D::builder().x(0).y(0).build(),
+            extent: self.swapchain.extent()
+        };
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(self.pipeline.render_pass().clone())
+            .render_area(render_area)
+            .framebuffer(self.buffers.framebuffers()[image_index as usize])
+            .clear_values(&clear_values)
+            .build();
+
+        let viewport = [
+            vk::Viewport::builder()
+                .x(0.0).y(0.0)
+                .width(self.swapchain.extent().width as f32)
+                .height(self.swapchain.extent().height as f32)
+                .min_depth(0.0)
+                .max_depth(1.0)
+            .build()
+        ];
+        let scissor = [vk::Rect2D {
+            offset: vk::Offset2D::builder().x(0).y(0).build(),
+            extent: self.swapchain.extent()
+        }];
+        unsafe {
+            self.device
+                .cmd_begin_render_pass(command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE);
+
+            self.device
+                .cmd_set_viewport(command_buffer, 0, &viewport);
+
+            self.device
+                .cmd_set_scissor(command_buffer, 0, &scissor);
+        }
+
+        // Render Objects
+        //bind pipeline
+        let vertex_buffers = [self.vertex_buffer];
+        let device_size_offsets: [vk::DeviceSize; 1] = [0];
+        unsafe {
+            self.device
+                .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
+
+            self.device
+                .cmd_bind_vertex_buffers(command_buffer,
+                    0,
+                    &vertex_buffers,
+                    &device_size_offsets
+                );
+            self.device
+                .cmd_push_constants(command_buffer,
+                    self.pipeline.pipeline_layout(),
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    0,
+                    structures::as_bytes(&self.push_const)
+                );
+
+            // Vertex count shouldn't be hardcoded but lets get this bread
+            self.device
+                .cmd_draw(command_buffer, 3, 1, 0, 0);
+        }
+
+        // End SwapchainRenderPass
+
+        unsafe {
+            self.device
+                .cmd_end_render_pass(command_buffer);
+        }
+        // End frame
+        unsafe {
+            self.device
+                .end_command_buffer(command_buffer)
+                .expect("ERROR: Failed to end commandbuffer");
+        }
+
+        let wait_semaphores = [self.sync_objects.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let signal_semaphores = [self.render_finished_semaphores[self.current_frame]];
+        let signal_semaphores = [self.sync_objects.render_finished_semaphores[self.current_frame]];
 
         let submit_infos = [vk::SubmitInfo::builder()
             .wait_semaphores(&wait_semaphores)
             .wait_dst_stage_mask(&wait_stages)
-            .command_buffers(&[self.command_buffers[image_index as usize]])
+            .command_buffers(&[self.buffers.command_buffers[self.current_frame]])
             .signal_semaphores(&signal_semaphores)
             .build()];
 
@@ -176,14 +285,14 @@ impl RendererAsh {
 
             self.device
                 .queue_submit(
-                    self.graphics_queue,
+                    self.swapchain.graphics_queue,
                     &submit_infos,
-                    self.in_flight_fences[self.current_frame],
+                    self.sync_objects.inflight_fences[self.current_frame],
                 )
                 .expect("Failed to execute queue submit.");
         }
 
-        let swapchains = [self.swapchain_info.swapchain];
+        let swapchains = [self.swapchain.swapchain()];
 
         let present_info = vk::PresentInfoKHR::builder()
             .wait_semaphores(&signal_semaphores)
@@ -191,9 +300,9 @@ impl RendererAsh {
             .image_indices(&[image_index])
             .build();
 
-        let result =unsafe {
-            self.swapchain_info.swapchain_loader
-                .queue_present(self.present_queue, &present_info)
+        let result = unsafe {
+            self.swapchain.swapchain_loader()
+                .queue_present(self.swapchain.present_queue, &present_info)
         };
 
         let is_resized = match result {
@@ -207,8 +316,13 @@ impl RendererAsh {
             self.is_framebuffer_resized = false;
             self.recreate_swapchain();
         }
+        // isFrameStarted = true;
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 
-        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;*/
+        // device wait idle
+        //unsafe {
+        //    self.device.device_wait_idle().expect("ERROR: Failed for device to wait idle")
+        //}
     }
 
     fn recreate_swapchain(&mut self) {

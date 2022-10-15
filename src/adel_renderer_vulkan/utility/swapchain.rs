@@ -20,6 +20,7 @@ impl AshSwapchain {
             unsafe { device.get_device_queue(context.queue_family.present_family.unwrap(), 0) };
         let swapchain_info = AshSwapchain::create_swapchain(context, device, window);
         let image_views = AshSwapchain::create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
+        log::debug!("JAKOB image_view names {}", image_views.len());
         Self {
             graphics_queue,
             present_queue,

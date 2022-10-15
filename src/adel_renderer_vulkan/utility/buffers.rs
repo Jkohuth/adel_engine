@@ -24,6 +24,7 @@ impl AshBuffers {
         );
         let command_pool = AshBuffers::create_command_pool(&device, &context.queue_family);
         let command_buffers = AshBuffers::create_command_buffers(&device, command_pool);
+        log::debug!("JAKOB command_buffer size {}\nFramebuffer size {}", command_buffers.len(), framebuffers.len());
         Self {
             framebuffers,
             command_pool,
@@ -213,6 +214,14 @@ impl AshBuffers {
     }
     pub unsafe fn destroy_command_pool(&mut self, device: &ash::Device) {
         device.destroy_command_pool(self.command_pool, None);
+    }
+
+    pub fn framebuffers(&self) -> &Vec<vk::Framebuffer> {
+        &self.framebuffers
+    }
+
+    pub fn commandbuffers(&self) -> &Vec<vk::CommandBuffer> {
+        &self.command_buffers
     }
 }
 
