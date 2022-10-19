@@ -20,7 +20,6 @@ impl AshSwapchain {
             unsafe { device.get_device_queue(context.queue_family.present_family.unwrap(), 0) };
         let swapchain_info = AshSwapchain::create_swapchain(context, device, window);
         let image_views = AshSwapchain::create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
-        log::debug!("JAKOB image_view names {}", image_views.len());
         Self {
             graphics_queue,
             present_queue,
@@ -55,6 +54,7 @@ impl AshSwapchain {
         let available_present_mode = available_present_modes.iter()
             .min_by_key( |present_mode|
                 match **present_mode {
+                    // NOTE: MAILBOX present mode seems to habe an issue rendering a triangle when using Intel
                     vk::PresentModeKHR::MAILBOX => 0,
                     vk::PresentModeKHR::FIFO => 1,
                     vk::PresentModeKHR::FIFO_RELAXED => 2,

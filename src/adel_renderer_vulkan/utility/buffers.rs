@@ -24,7 +24,6 @@ impl AshBuffers {
         );
         let command_pool = AshBuffers::create_command_pool(&device, &context.queue_family);
         let command_buffers = AshBuffers::create_command_buffers(&device, command_pool);
-        log::debug!("JAKOB command_buffer size {}\nFramebuffer size {}", command_buffers.len(), framebuffers.len());
         Self {
             framebuffers,
             command_pool,

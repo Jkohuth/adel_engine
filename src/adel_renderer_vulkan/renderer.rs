@@ -229,7 +229,7 @@ impl RendererAsh {
 
         // Render Objects
         //bind pipeline
-        let vertex_buffers = [self.vertex_buffer];
+        let vertex_buffers = [self.vertex_buffer.clone()];
         let device_size_offsets: [vk::DeviceSize; 1] = [0];
         unsafe {
             self.device
@@ -241,13 +241,13 @@ impl RendererAsh {
                     &vertex_buffers,
                     &device_size_offsets
                 );
-            self.device
-                .cmd_push_constants(command_buffer,
-                    self.pipeline.pipeline_layout(),
-                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    0,
-                    structures::as_bytes(&self.push_const)
-                );
+            //self.device
+            //    .cmd_push_constants(command_buffer,
+            //        self.pipeline.pipeline_layout(),
+            //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            //        0,
+            //        structures::as_bytes(&self.push_const)
+            //    );
 
             // Vertex count shouldn't be hardcoded but lets get this bread
             self.device
