@@ -109,7 +109,10 @@ impl Application {
                     for i in &mut self.systems {
                         i.as_mut().run(&mut self.world);
                     }
-                }
+                    // Perhaps request redraw here
+                } Event::RedrawRequested(_window_id) => {
+                    // Redraw frame
+                },
                 Event::RedrawEventsCleared => {
 
                 }

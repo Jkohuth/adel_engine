@@ -40,6 +40,7 @@ use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEve
 use winit::event_loop::{EventLoop, ControlFlow};
 use winit::window::Window;
 
+use crate::adel_winit::WinitWindow;
 const NAME: &'static str = "Renderer";
 
 // May have to invert the order here, as the values of structs are dropped in the order they are declared
@@ -63,18 +64,18 @@ pub struct RendererAsh {
     is_framebuffer_resized: bool,
 
     push_const: structures::PushConstantData,
-    pub window: Window,
+    pub window: WinitWindow,
 
     name: &'static str,
 }
 
 impl RendererAsh {
-    pub fn new(window: Window) -> Self {
+    pub fn new(window: WinitWindow) -> Self {
         // init vulkan stuff
         let entry = unsafe { ash::Entry::load().expect("Error: Failed to create Ash Entry") };
-        let context = AshContext::new(&entry, &window);
+        let context = AshContext::new(&entry, window.window_ref().unwrap());
         let device = create_logical_device(&context, &VALIDATION_LAYERS.to_vec());
-        let swapchain = AshSwapchain::new(&context, &device, &window);
+        let swapchain = AshSwapchain::new(&context, &device, window.window_ref().unwrap());
         let pipeline = AshPipeline::new(&device, swapchain.format(), swapchain.extent());
         let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline);
 
@@ -82,23 +83,6 @@ impl RendererAsh {
         for i in VERTICES_DATA {
             vertices_data.push(i);
         }
-        /*let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&instance, &device, physical_device, &vertices_data);
-        let push_const = structures::PushConstantData {
-            transform: nalgebra::Matrix4::identity(),
-            color: nalgebra::Vector3::new(1.0, 0.0, 0.0),
-        };
-        let command_buffers = buffers::create_command_buffers_(
-            &device,
-            command_pool,
-            graphics_pipeline,
-            &framebuffers,
-            render_pass,
-            swapchain_info.swapchain_extent,
-            vertex_buffer,
-            &push_const,
-            pipeline_layout.clone()
-        );
-        */
         let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&context.instance(), &device, context.physical_device, &vertices_data);
         let push_const = structures::PushConstantData {
             transform: nalgebra::Matrix4::identity(),
@@ -131,10 +115,6 @@ impl RendererAsh {
 
 impl RendererAsh {
     pub fn draw_frame(&mut self) {
-        // There is a discrepency between the number of frames permitted in flight and the size of the
-        // the swapchain views/framebuffers. Those two can be of different sizes but there should only be two
-        // command buffers at the same time. Figure out what is required for image_index and what for self.current_frame
-
         // Also fix your graphics card drivers it's a solid 10 seconds to check if each run is successful
         // beginFrame, acquire commandBuffer
 
@@ -318,23 +298,9 @@ impl RendererAsh {
         }
         // isFrameStarted = true;
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
-
-        // device wait idle
-        //unsafe {
-        //    self.device.device_wait_idle().expect("ERROR: Failed for device to wait idle")
-        //}
     }
 
     fn recreate_swapchain(&mut self) {
-        // parameters -------------
-        let surface_info = structures::SurfaceInfo {
-            surface_loader: self.context.surface_info.surface_loader.clone(),
-            surface: self.context.surface_info.surface,
-            screen_width: self.window.inner_size().width,
-            screen_height: self.window.inner_size().height,
-        };
-        // ------------------------
-
         unsafe {
             self.device
                 .device_wait_idle()
@@ -342,11 +308,12 @@ impl RendererAsh {
         };
         // TODO: Create proper cleanup function
         self.destroy_swapchain_resources();
-
+        let width_height = self.window.window_width_height();
+        self.context.surface_info.update_screen_width_height(width_height.0, width_height.1);
         self.swapchain.recreate_swapchain(
             &self.context,
             &self.device,
-            &self.window,
+            self.window.window_ref().unwrap(),
         );
 
         self.pipeline.recreate_render_pass(&self.device, self.swapchain.swapchain_info.swapchain_format);
@@ -356,7 +323,7 @@ impl RendererAsh {
             &self.swapchain.image_views(),
             self.swapchain.extent(),
         );
-        // NOTE: sync_objects may need to be recreated if the total number of frames changed
+        // NOTE: sync_objects may need to be recreated if the total number of frames in flight changed
     }
 
     fn destroy_swapchain_resources(&mut self) {

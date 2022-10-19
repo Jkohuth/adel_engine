@@ -11,18 +11,14 @@ use winit::{
 
 use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 use winit::event_loop::{ControlFlow};
-
+use adel::window::WinitWindow;
 fn main() {
 
     simple_logger::SimpleLogger::new().env().init().unwrap();
-    let event_loop: EventLoop<()> = EventLoop::new();
-    let mut window = WindowBuilder::new()
-            .with_title("Test Window")
-            .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
-            .build(&event_loop)
-            .expect("Failed: Create window");
+    let window = WinitWindow::new();
     let mut vulkan_app = RendererAsh::new(window);
-    main_loop(vulkan_app, event_loop);
+    let event_loop = vulkan_app.window.event_loop();
+    main_loop(vulkan_app, event_loop.unwrap());
 }
 
     pub fn main_loop(mut app: RendererAsh, event_loop: EventLoop<()>) {
@@ -51,7 +47,7 @@ fn main() {
                     }
                 },
                 | Event::MainEventsCleared => {
-                    app.window.request_redraw();
+                    app.window.window_ref().unwrap().request_redraw();
                 },
                 | Event::RedrawRequested(_window_id) => {
                     app.draw_frame();

@@ -12,6 +12,12 @@ pub struct SurfaceInfo {
     pub screen_width: u32,
     pub screen_height: u32,
 }
+impl SurfaceInfo {
+    pub fn update_screen_width_height(&mut self, width: u32, height: u32) {
+        self.screen_width = width;
+        self.screen_height = height;
+    }
+}
 
 pub struct QueueFamilyIndices {
     pub graphics_family: Option<u32>,
