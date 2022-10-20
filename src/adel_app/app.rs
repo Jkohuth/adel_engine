@@ -5,6 +5,7 @@ use crate::adel_ecs::System;
 use crate::adel_winit::WinitWindow;
 use crate::adel_camera::Camera;
 use crate::adel_input::{ KeyboardHandler, InputConsumer };
+use crate::adel_renderer_vulkan::RendererAsh;
 use glam::{Vec3};
 use std::collections::HashSet;
 use std::time;
@@ -31,6 +32,7 @@ impl Application {
     pub fn new(mut world: World) -> Self {
         let mut winit_window = WinitWindow::new();
         let event_loop: EventLoop<()> = winit_window.event_loop().unwrap();
+        let renderer_ash = RendererAsh::new(winit_window);
         //let renderer = VulkanoRenderer::new(winit_window.window().unwrap());
         // Create the input Consumer and keyboard handler
         let keyboard_handler = KeyboardHandler::new();
@@ -47,7 +49,7 @@ impl Application {
         //log::info!("What is the value {:?}", keyboard.pressed);
         let mut systems: Vec<Box<dyn System>> = Vec::new();
         systems.push(Box::new(keyboard_handler));
-        //systems.push(Box::new(renderer));
+        systems.push(Box::new(renderer_ash));
         Self {
             world,
             systems,
@@ -109,12 +111,22 @@ impl Application {
                     for i in &mut self.systems {
                         i.as_mut().run(&mut self.world);
                     }
+                    // Currently all the systems are ran in order
+                    //
                     // Perhaps request redraw here
+                    //renderer_ash.window_ref().unwrap().request_redraw();
+
                 } Event::RedrawRequested(_window_id) => {
                     // Redraw frame
+
                 },
                 Event::RedrawEventsCleared => {
 
+                },
+                Event::LoopDestroyed => {
+                    for i in &mut self.systems {
+                        i.as_mut().shutdown(&mut self.world);
+                    }
                 }
                 _ => (),
             }

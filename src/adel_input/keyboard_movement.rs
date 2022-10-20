@@ -60,6 +60,7 @@ impl System for KeyboardHandler {
         }
         */
     }
+    fn shutdown(&mut self, world: &mut World) {}
     fn name(&self) -> &str {
         self.name
     }

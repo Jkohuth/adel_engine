@@ -86,7 +86,7 @@ impl RendererAsh {
         let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&context.instance(), &device, context.physical_device, &vertices_data);
         let push_const = structures::PushConstantData {
             transform: nalgebra::Matrix4::identity(),
-            color: nalgebra::Vector3::new(1.0, 1.0, 1.0),
+            color: nalgebra::Vector3::new(1.0, 0.0, 1.0),
         };
 
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT);
@@ -115,9 +115,7 @@ impl RendererAsh {
 
 impl RendererAsh {
     pub fn draw_frame(&mut self) {
-        // Also fix your graphics card drivers it's a solid 10 seconds to check if each run is successful
-        // beginFrame, acquire commandBuffer
-
+        // TODO: check if it renders using intel graphics card
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
 
@@ -221,13 +219,13 @@ impl RendererAsh {
                     &vertex_buffers,
                     &device_size_offsets
                 );
-            //self.device
-            //    .cmd_push_constants(command_buffer,
-            //        self.pipeline.pipeline_layout(),
-            //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            //        0,
-            //        structures::as_bytes(&self.push_const)
-            //    );
+            self.device
+                .cmd_push_constants(command_buffer,
+                    self.pipeline.pipeline_layout(),
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    0,
+                    structures::as_bytes(&self.push_const)
+                );
 
             // Vertex count shouldn't be hardcoded but lets get this bread
             self.device
@@ -306,7 +304,6 @@ impl RendererAsh {
                 .device_wait_idle()
                 .expect("Failed to wait device idle!")
         };
-        // TODO: Create proper cleanup function
         self.destroy_swapchain_resources();
         let width_height = self.window.window_width_height();
         self.context.surface_info.update_screen_width_height(width_height.0, width_height.1);
@@ -338,7 +335,14 @@ impl RendererAsh {
 
 impl System for RendererAsh {
     fn startup(&mut self, world: &mut World) {}
-    fn run(&mut self, world: &mut World) {}
+    fn run(&mut self, world: &mut World) {
+        self.draw_frame();
+    }
+    fn shutdown(&mut self, world: &mut World) {
+        unsafe {
+            self.device.device_wait_idle().expect("ERROR: Failed to wait device idle on shutdown")
+        };
+    }
     fn name(&self) -> &'static str { self.name }
 }
 
