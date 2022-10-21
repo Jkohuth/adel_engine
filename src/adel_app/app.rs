@@ -83,9 +83,12 @@ impl Application {
                         ..
                     } => *control_flow = ControlFlow::Exit,
                     WindowEvent::KeyboardInput { ref input, .. } => {
-                        //log::info!("Storing Keyboard Input");
                         if let Some(mut keyboard_input) = self.world.get_resource_mut::<InputConsumer>() {
                             keyboard_input.keyboard_input_system(input);
+                        }
+                        // Special casing is bad design, but I'll leave this for now
+                        if input.virtual_keycode.unwrap() == VirtualKeyCode::Escape {
+                            *control_flow = ControlFlow::Exit;
                         }
                     },
                     _ => {
