@@ -103,7 +103,7 @@ impl World {
     pub fn insert_component<ComponentType: 'static>(&mut self, component: Vec<Option<ComponentType>>) {
         // All the component Vectors need to be the same length, if we have a mismatched number of entities, fail
         // Note: Arrays indexed at 0
-        assert_eq!(self.entities_count, (component.len() + 1) );
+        assert_eq!(self.entities_count, component.len() );
         self.components.push(Box::new(RefCell::new(component)));
     }
     pub fn borrow_component_mut<ComponentType: 'static>(&self) -> Option<RefMut<Vec<Option<ComponentType>>>> {

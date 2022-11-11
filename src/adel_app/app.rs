@@ -5,7 +5,7 @@ use crate::adel_ecs::System;
 use crate::adel_winit::WinitWindow;
 use crate::adel_camera::Camera;
 use crate::adel_input::{ KeyboardHandler, InputConsumer };
-use crate::adel_renderer_vulkan::RendererAsh;
+use crate::adel_renderer_ash::RendererAsh;
 use glam::{Vec3};
 use std::collections::HashSet;
 use std::time;

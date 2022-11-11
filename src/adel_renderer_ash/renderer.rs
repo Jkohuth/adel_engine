@@ -4,27 +4,26 @@ use ash::vk;
 //use winit::event_loop::{EventLoop, ControlFlow};
 
 use log;
-use crate::adel_renderer_vulkan::utility::structures::Vertex;
 use nalgebra::{Vector2, Vector3};
 use nalgebra;
 
 use crate::adel_ecs::{System, World};
-const VERTICES_DATA: [Vertex; 3] = [
-    Vertex {
+const VERTICES_DATA: [Vertex2d; 3] = [
+    Vertex2d {
         position: Vector2::new(0.0, -0.5),
         color: Vector3::new(1.0, 0.0, 0.0),
     },
-    Vertex {
+    Vertex2d {
         position: Vector2::new(0.5, 0.5),
         color: Vector3::new(0.0, 1.0, 0.0),
     },
-    Vertex {
+    Vertex2d {
         position: Vector2::new(-0.5, 0.5),
         color: Vector3::new(0.0, 0.0, 1.0),
     },
 ];
 // TODO: Create a prelude and add these to it
-use crate::adel_renderer_vulkan::utility::{
+use crate::adel_renderer_ash::utility::{
     constants::*,
     platforms,
     structures,
@@ -36,9 +35,12 @@ use crate::adel_renderer_vulkan::utility::{
     buffers,
     sync::SyncObjects,
 };
-use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
-use winit::event_loop::{EventLoop, ControlFlow};
-use winit::window::Window;
+use crate::adel_renderer_ash::utility::structures::{
+    TriangleComponent,
+    Vertex2d,
+    VertexBuffer,
+};
+use crate::adel_tools::*;
 
 use crate::adel_winit::WinitWindow;
 const NAME: &'static str = "Renderer";
@@ -79,7 +81,7 @@ impl RendererAsh {
         let pipeline = AshPipeline::new(&device, swapchain.format(), swapchain.extent());
         let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline);
 
-        let mut vertices_data: Vec<Vertex> = Vec::new();
+        let mut vertices_data: Vec<Vertex2d> = Vec::new();
         for i in VERTICES_DATA {
             vertices_data.push(i);
         }
@@ -114,7 +116,7 @@ impl RendererAsh {
 }
 
 impl RendererAsh {
-    pub fn draw_frame(&mut self) {
+    pub fn draw_frame(&mut self, vertex_buffers: Vec<vk::Buffer>) {
         // TODO: check if it renders using intel graphics card
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
@@ -207,29 +209,30 @@ impl RendererAsh {
 
         // Render Objects
         //bind pipeline
-        let vertex_buffers = [self.vertex_buffer.clone()];
         let device_size_offsets: [vk::DeviceSize; 1] = [0];
         unsafe {
             self.device
                 .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
+            for buffer in vertex_buffers {
+                self.device
+                    .cmd_bind_vertex_buffers(command_buffer,
+                        0,
+                        &[buffer],
+                        &device_size_offsets
+                    );
+                self.device
+                    .cmd_push_constants(command_buffer,
+                        self.pipeline.pipeline_layout(),
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        0,
+                        as_bytes(&self.push_const)
+                    );
 
-            self.device
-                .cmd_bind_vertex_buffers(command_buffer,
-                    0,
-                    &vertex_buffers,
-                    &device_size_offsets
-                );
-            self.device
-                .cmd_push_constants(command_buffer,
-                    self.pipeline.pipeline_layout(),
-                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    0,
-                    structures::as_bytes(&self.push_const)
-                );
+                // Vertex count shouldn't be hardcoded but lets get this bread
+                self.device
+                    .cmd_draw(command_buffer, 3, 1, 0, 0);
 
-            // Vertex count shouldn't be hardcoded but lets get this bread
-            self.device
-                .cmd_draw(command_buffer, 3, 1, 0, 0);
+            }
         }
 
         // End SwapchainRenderPass
@@ -334,13 +337,62 @@ impl RendererAsh {
 }
 
 impl System for RendererAsh {
-    fn startup(&mut self, world: &mut World) {}
+    fn startup(&mut self, world: &mut World) {
+        let mut vert_buffer_component_vec: Vec<Option<VertexBuffer>> = Vec::new();
+
+        {
+            // Borrow the vertices that have been supplied to the world
+            let triangles = world.borrow_component::<TriangleComponent>().unwrap();
+            for triangle in triangles.iter().enumerate() {
+                match triangle.1 {
+                    Some(triangle_component) => {
+                        // TODO: Rename these variables
+                        let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer_from_triangle(&self.context, &self.device, triangle_component);
+                        let vertex_buf: VertexBuffer = VertexBuffer { buffer: vertex_buffer, memory: vertex_buffer_memory };
+                        vert_buffer_component_vec.push(Some(vertex_buf));
+                    }, None => {
+                        vert_buffer_component_vec.push(None);
+                    }
+                }
+            }
+        }
+        log::info!("Vertex Buffer size {}", vert_buffer_component_vec.len());
+        world.insert_component(vert_buffer_component_vec);
+    }
     fn run(&mut self, world: &mut World) {
-        self.draw_frame();
+        // Copied from adel_renderer(_vulkano)
+        // Get the camera projection
+        // Apply the transformation matrix to it
+        // iterate through all the transforms and apply the camera translation
+        // draw frame
+        //let camera = world.get_resource::<Camera>().unwrap();
+        //let projection_matrix = camera.get_projection() * camera.get_view();
+        //let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
+        //let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
+        let vertex_option_buffers = world.borrow_component::<VertexBuffer>().unwrap();
+        let mut vertex_buffers: Vec<vk::Buffer> = Vec::new();
+        for i in vertex_option_buffers.iter() {
+            if let Some(buffer) = i {
+                vertex_buffers.push(buffer.buffer.clone());
+            }
+        }
+        self.draw_frame(vertex_buffers);
     }
     fn shutdown(&mut self, world: &mut World) {
         unsafe {
-            self.device.device_wait_idle().expect("ERROR: Failed to wait device idle on shutdown")
+            self.device.device_wait_idle().expect("ERROR: Failed to wait device idle on shutdown");
+
+            let mut vertex_buffers = world.borrow_component_mut::<VertexBuffer>().unwrap();
+
+            for i in vertex_buffers.iter_mut() {
+                match i {
+                    Some(buffer) => {
+                        self.device.destroy_buffer(buffer.buffer, None);
+                        self.device.free_memory(buffer.memory, None);
+                    }, None => {}
+                }
+            }
+
         };
     }
     fn name(&self) -> &'static str { self.name }

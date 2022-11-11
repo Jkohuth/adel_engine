@@ -1,7 +1,6 @@
 use ash::vk;
 use winit::window::Window;
 use log;
-use super::structures;
 use super::structures::SurfaceInfo;
 use super::context::AshContext;
 
