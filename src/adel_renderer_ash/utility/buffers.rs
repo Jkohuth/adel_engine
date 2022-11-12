@@ -5,10 +5,9 @@ use super::{
     swapchain::AshSwapchain,
     context::AshContext,
 };
-
+use crate::adel_renderer_ash::definitions::{TriangleComponent, Vertex2d};
 use super::structures;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
-
 pub struct AshBuffers {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub command_pool: vk::CommandPool,
@@ -284,7 +283,6 @@ pub fn _record_command_buffers(
     }
 
 }
-use super::structures::TriangleComponent;
 pub fn create_vertex_buffer_from_triangle(
     context: &AshContext,
     device: &ash::Device,
@@ -335,7 +333,7 @@ pub fn create_vertex_buffer_from_triangle(
                 vertex_buffer_create_info.size,
                 vk::MemoryMapFlags::empty(),
             )
-            .expect("Failed to Map Memory") as *mut structures::Vertex2d;
+            .expect("Failed to Map Memory") as *mut Vertex2d;
 
         data_ptr.copy_from_nonoverlapping(triangle.verticies.as_ptr(), triangle.verticies.len());
 
@@ -351,7 +349,7 @@ pub fn create_vertex_buffer(
     instance: &ash::Instance,
     device: &ash::Device,
     physical_device: vk::PhysicalDevice,
-    vertices_data: &Vec<structures::Vertex2d>
+    vertices_data: &Vec<Vertex2d>
 ) -> (vk::Buffer, vk::DeviceMemory) {
     let vertex_buffer_create_info = vk::BufferCreateInfo::builder()
         .size(std::mem::size_of_val(vertices_data) as u64)
@@ -399,7 +397,7 @@ pub fn create_vertex_buffer(
                 vertex_buffer_create_info.size,
                 vk::MemoryMapFlags::empty(),
             )
-            .expect("Failed to Map Memory") as *mut structures::Vertex2d;
+            .expect("Failed to Map Memory") as *mut Vertex2d;
 
         data_ptr.copy_from_nonoverlapping(vertices_data.as_ptr(), vertices_data.len());
 

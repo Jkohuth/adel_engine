@@ -2,7 +2,7 @@ use ash::vk;
 use std::ffi::CString;
 use inline_spirv::include_spirv;
 use crate::offset_of;
-use super::structures::{PushConstantData, Vertex2d};
+use crate::adel_renderer_ash::definitions::{PushConstantData, Vertex2d};
 
 pub struct AshPipeline {
     render_pass: vk::RenderPass,

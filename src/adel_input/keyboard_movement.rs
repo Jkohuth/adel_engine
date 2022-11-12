@@ -66,9 +66,6 @@ impl System for KeyboardHandler {
     }
 }
 
-pub fn print_type_of<T>(_: &T) {
-    log::info!("T is of Type {:?}", std::any::type_name::<T>());
-}
 static LOOK_SPEED: f32 = 1.5;
 static MOVE_SPEED: f32 = 3.0;
 

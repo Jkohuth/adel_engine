@@ -7,5 +7,6 @@ layout(push_constant) uniform PushConstantData {
     vec3 color;
 } push;
 void main() {
-    outColor = vec4(inColor + push.color, 1.0);
+    //outColor = vec4(inColor + push.color, 1.0);
+    outColor = vec4(inColor, 1.0);
 }

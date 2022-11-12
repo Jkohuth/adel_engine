@@ -8,20 +8,6 @@ use nalgebra::{Vector2, Vector3};
 use nalgebra;
 
 use crate::adel_ecs::{System, World};
-const VERTICES_DATA: [Vertex2d; 3] = [
-    Vertex2d {
-        position: Vector2::new(0.0, -0.5),
-        color: Vector3::new(1.0, 0.0, 0.0),
-    },
-    Vertex2d {
-        position: Vector2::new(0.5, 0.5),
-        color: Vector3::new(0.0, 1.0, 0.0),
-    },
-    Vertex2d {
-        position: Vector2::new(-0.5, 0.5),
-        color: Vector3::new(0.0, 0.0, 1.0),
-    },
-];
 // TODO: Create a prelude and add these to it
 use crate::adel_renderer_ash::utility::{
     constants::*,
@@ -35,11 +21,15 @@ use crate::adel_renderer_ash::utility::{
     buffers,
     sync::SyncObjects,
 };
-use crate::adel_renderer_ash::utility::structures::{
+use super::definitions::{
+    create_push_constant_data,
+    PushConstantData,
+    TransformComponent,
     TriangleComponent,
     Vertex2d,
     VertexBuffer,
 };
+use crate::adel_camera::Camera;
 use crate::adel_tools::*;
 
 use crate::adel_winit::WinitWindow;
@@ -56,8 +46,6 @@ pub struct RendererAsh {
 
     pipeline: AshPipeline,
     buffers: AshBuffers,
-    vertex_buffer: vk::Buffer,
-    vertex_buffer_memory: vk::DeviceMemory,
 
     sync_objects: SyncObjects,
 
@@ -65,7 +53,7 @@ pub struct RendererAsh {
 
     is_framebuffer_resized: bool,
 
-    push_const: structures::PushConstantData,
+    push_const: PushConstantData,
     pub window: WinitWindow,
 
     name: &'static str,
@@ -81,12 +69,7 @@ impl RendererAsh {
         let pipeline = AshPipeline::new(&device, swapchain.format(), swapchain.extent());
         let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline);
 
-        let mut vertices_data: Vec<Vertex2d> = Vec::new();
-        for i in VERTICES_DATA {
-            vertices_data.push(i);
-        }
-        let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer(&context.instance(), &device, context.physical_device, &vertices_data);
-        let push_const = structures::PushConstantData {
+        let push_const = PushConstantData {
             transform: nalgebra::Matrix4::identity(),
             color: nalgebra::Vector3::new(1.0, 0.0, 1.0),
         };
@@ -100,8 +83,6 @@ impl RendererAsh {
             swapchain,
             pipeline,
             buffers,
-            vertex_buffer,
-            vertex_buffer_memory,
             sync_objects,
             current_frame: 0,
             is_framebuffer_resized: false,
@@ -116,7 +97,7 @@ impl RendererAsh {
 }
 
 impl RendererAsh {
-    pub fn draw_frame(&mut self, vertex_buffers: Vec<vk::Buffer>) {
+    pub fn draw_frame(&mut self, vertex_buffers: Vec<(vk::Buffer, PushConstantData)>) {
         // TODO: check if it renders using intel graphics card
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
@@ -217,9 +198,16 @@ impl RendererAsh {
                 self.device
                     .cmd_bind_vertex_buffers(command_buffer,
                         0,
-                        &[buffer],
+                        &[buffer.0],
                         &device_size_offsets
                     );
+                //self.device
+                //    .cmd_push_constants(command_buffer,
+                //        self.pipeline.pipeline_layout(),
+                //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                //        0,
+                //        as_bytes(&buffer.1)
+                //    );
                 self.device
                     .cmd_push_constants(command_buffer,
                         self.pipeline.pipeline_layout(),
@@ -228,7 +216,7 @@ impl RendererAsh {
                         as_bytes(&self.push_const)
                     );
 
-                // Vertex count shouldn't be hardcoded but lets get this bread
+                // TODO: Vertex count shouldn't be hardcoded but lets get this bread
                 self.device
                     .cmd_draw(command_buffer, 3, 1, 0, 0);
 
@@ -365,18 +353,21 @@ impl System for RendererAsh {
         // Apply the transformation matrix to it
         // iterate through all the transforms and apply the camera translation
         // draw frame
-        //let camera = world.get_resource::<Camera>().unwrap();
-        //let projection_matrix = camera.get_projection() * camera.get_view();
+        let camera = world.get_resource::<Camera>().unwrap();
+        let projection_matrix = camera.get_projection() * camera.get_view();
         //let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
-        //let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
+        let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
         let vertex_option_buffers = world.borrow_component::<VertexBuffer>().unwrap();
-        let mut vertex_buffers: Vec<vk::Buffer> = Vec::new();
-        for i in vertex_option_buffers.iter() {
-            if let Some(buffer) = i {
-                vertex_buffers.push(buffer.buffer.clone());
+        let mut buffers_push_constant: Vec<(vk::Buffer, PushConstantData)> = Vec::new();
+        for i in vertex_option_buffers.iter().enumerate() {
+            if let Some(buffer) = i.1 {
+                if let Some(transform) = &mut transform_ref[i.0] {
+                    buffers_push_constant.push((buffer.buffer.clone(),
+                        create_push_constant_data(projection_matrix, transform)));
+                }
             }
         }
-        self.draw_frame(vertex_buffers);
+        self.draw_frame(buffers_push_constant);
     }
     fn shutdown(&mut self, world: &mut World) {
         unsafe {
@@ -416,9 +407,6 @@ impl Drop for RendererAsh {
 
             // Destroys Pipeline and PipelineLayout
             self.pipeline.destroy_pipeline(&self.device);
-
-            self.device.destroy_buffer(self.vertex_buffer, None);
-            self.device.free_memory(self.vertex_buffer_memory, None);
 
             self.device.destroy_device(None);
             self.context.destroy_context();

@@ -36,34 +36,3 @@ impl QueueFamilyIndices {
         self.graphics_family.is_some() && self.present_family.is_some()
     }
 }
-use nalgebra;
-#[derive(Debug)]
-#[repr(C)]
-pub struct Vertex2d {
-    pub position: nalgebra::Vector2::<f32>,
-    pub color: nalgebra::Vector3::<f32>,
-}
-pub struct TriangleComponent {
-    pub verticies: Vec<Vertex2d>
-}
-impl TriangleComponent {
-    pub fn new(verticies: Vec<Vertex2d>) -> Self {
-        assert_eq!(verticies.len(), 3);
-        Self {
-            verticies
-        }
-    }
-}
-use ash::vk::{Buffer, DeviceMemory};
-// TODO: Create separate files for Vertex specific structs
-// TODO: Come up with a better name for this
-pub struct VertexBuffer {
-    pub buffer: Buffer,
-    pub memory: DeviceMemory,
-}
-#[repr(C)]
-#[derive(Debug)]
-pub struct PushConstantData {
-    pub transform: nalgebra::Matrix4<f32>,
-    pub color: nalgebra::Vector3<f32>
-}
