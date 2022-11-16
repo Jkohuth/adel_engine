@@ -57,6 +57,8 @@ pub struct RendererAsh {
     pub window: WinitWindow,
 
     name: &'static str,
+
+    is_frame_started: bool,
 }
 
 impl RendererAsh {
@@ -90,6 +92,7 @@ impl RendererAsh {
             push_const,
             window,
             name: NAME,
+            is_frame_started: false,
         }
 
     }
@@ -98,7 +101,6 @@ impl RendererAsh {
 
 impl RendererAsh {
     pub fn draw_frame(&mut self, vertex_buffers: Vec<(vk::Buffer, PushConstantData)>) {
-        // TODO: check if it renders using intel graphics card
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
 
@@ -127,6 +129,7 @@ impl RendererAsh {
                 },
             }
         };
+        self.is_frame_started = true;
         // Set isFrameStarted to true
         // Get the command buffer from the vector that is equal to the current frame
         let command_buffer = self.buffers.commandbuffers()[self.current_frame];
@@ -201,20 +204,20 @@ impl RendererAsh {
                         &[buffer.0],
                         &device_size_offsets
                     );
-                //self.device
-                //    .cmd_push_constants(command_buffer,
-                //        self.pipeline.pipeline_layout(),
-                //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                //        0,
-                //        as_bytes(&buffer.1)
-                //    );
                 self.device
                     .cmd_push_constants(command_buffer,
                         self.pipeline.pipeline_layout(),
                         vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                         0,
-                        as_bytes(&self.push_const)
+                        as_bytes(&buffer.1)
                     );
+                //self.device
+                //    .cmd_push_constants(command_buffer,
+                //        self.pipeline.pipeline_layout(),
+                //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                //        0,
+                //        as_bytes(&self.push_const)
+                //    );
 
                 // TODO: Vertex count shouldn't be hardcoded but lets get this bread
                 self.device
@@ -322,6 +325,61 @@ impl RendererAsh {
         }
     }
 
+    // Will be worth revisiting at a later time if splitting up draw_frame is desired
+    #[allow(dead_code)]
+    fn begin_frame(&mut self) -> vk::CommandBuffer {
+        assert_eq!(self.is_frame_started, false);
+        // Wait for the fences to clear prior to beginning the next render
+        let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
+
+        unsafe {
+            self.device
+                .wait_for_fences(&wait_fences, true, std::u64::MAX)
+                .expect("Failed to wait for Fence!");
+        }
+
+        // Acquire the next image in the swapchain
+        let (image_index, _is_sub_optimal) = unsafe {
+            let result = self.swapchain.swapchain_loader().acquire_next_image(
+                self.swapchain.swapchain(),
+                std::u64::MAX,
+                self.sync_objects.image_available_semaphores[self.current_frame],
+                vk::Fence::null(),
+            );
+            match result {
+                Ok(image_index) => image_index,
+                Err(vk_result) =>
+                    match vk_result {
+                        // TODO: If getting the image index fails crash the program
+                        //vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                        //    self.recreate_swapchain();
+                        //    return;
+                        //}
+                        _ => panic!("Failed to acquire Swap Chain Image!"),
+                },
+            }
+        };
+        self.is_frame_started = true;
+        // Set isFrameStarted to true
+        // Get the command buffer from the vector that is equal to the current frame
+        let command_buffer = self.buffers.commandbuffers()[self.current_frame];
+        let begin_info = vk::CommandBufferBeginInfo::default();
+
+        unsafe {
+            self.device.
+                begin_command_buffer(command_buffer, &begin_info)
+                .expect("ERROR: Failed to begin command buffer");
+        }
+        command_buffer
+    }
+
+}
+use nalgebra::Matrix4;
+pub fn create_push_constant_data_proj(camera_projection : Matrix4<f32>) -> PushConstantData {
+    PushConstantData {
+        transform: camera_projection,
+        color: Vector3::new(0.0, 0.0, 0.0),
+    }
 }
 
 impl System for RendererAsh {
@@ -344,7 +402,7 @@ impl System for RendererAsh {
                 }
             }
         }
-        log::info!("Vertex Buffer size {}", vert_buffer_component_vec.len());
+
         world.insert_component(vert_buffer_component_vec);
     }
     fn run(&mut self, world: &mut World) {
@@ -363,7 +421,8 @@ impl System for RendererAsh {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &mut transform_ref[i.0] {
                     buffers_push_constant.push((buffer.buffer.clone(),
-                        create_push_constant_data(projection_matrix, transform)));
+                        //create_push_constant_data(projection_matrix, transform)));
+                        create_push_constant_data_proj(projection_matrix)));
                 }
             }
         }

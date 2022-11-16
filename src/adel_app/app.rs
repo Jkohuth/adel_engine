@@ -43,8 +43,9 @@ impl Application {
         //camera.set_perspective_projection((50.0f32).to_radians(), renderer.vulkano_window().aspect_ratio(), 0.1, 10.0);
         //camera.set_view_direction(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.1, 0.0, 1.0), None);
         //camera.set_view_target(Vec3::new(-1.0, 2.0, -2.0), Vec3::new(0.0, 0.0, 2.5), None);
-        camera.set_view_yxz(Vector3::new(-1.0, 2.0, -2.0),
-        Vector3::new(0.0, 0.0, 0.0));
+        // The current lack of depth buffering effects whether it can be rendered
+        //camera.set_view_yxz(Vector3::new(0.0, 0.0, 0.0),
+        //        Vector3::new(0.0, 0.0, 0.0));
         world.insert_resource::<InputConsumer>(input_consumer);
         world.insert_resource::<Camera>(camera);
         //log::info!("What is the value {:?}", keyboard.pressed);
