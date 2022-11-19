@@ -12,6 +12,12 @@ pub struct SurfaceInfo {
     pub screen_width: u32,
     pub screen_height: u32,
 }
+impl SurfaceInfo {
+    pub fn update_screen_width_height(&mut self, width: u32, height: u32) {
+        self.screen_width = width;
+        self.screen_height = height;
+    }
+}
 
 pub struct QueueFamilyIndices {
     pub graphics_family: Option<u32>,
@@ -29,22 +35,4 @@ impl QueueFamilyIndices {
     pub fn is_complete(&self) -> bool {
         self.graphics_family.is_some() && self.present_family.is_some()
     }
-}
-use nalgebra;
-#[repr(C)]
-pub struct Vertex {
-    pub position: nalgebra::Vector2::<f32>,
-    pub color: nalgebra::Vector3::<f32>,
-}
-#[repr(C)]
-#[derive(Debug)]
-pub struct PushConstantData {
-    pub transform: nalgebra::Matrix4<f32>,
-    pub color: nalgebra::Vector3<f32>
-}
-pub unsafe fn as_bytes<T: Sized>(p: &T) -> &[u8] {
-    ::std::slice::from_raw_parts(
-        (p as *const T) as *const u8,
-        std::mem::size_of::<T>()
-    )
 }

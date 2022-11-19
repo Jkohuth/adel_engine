@@ -5,10 +5,9 @@ use super::{
     swapchain::AshSwapchain,
     context::AshContext,
 };
-
+use crate::adel_renderer_ash::definitions::{TriangleComponent, Vertex2d};
 use super::structures;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
-
 pub struct AshBuffers {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub command_pool: vk::CommandPool,
@@ -98,7 +97,7 @@ impl AshBuffers {
 
     }
 
-    fn create_command_buffers_(
+/*    fn create_command_buffers_(
         device: &ash::Device,
         command_pool: vk::CommandPool,
         graphics_pipeline: vk::Pipeline,
@@ -193,7 +192,7 @@ impl AshBuffers {
         }
         command_buffers
     }
-
+*/
     pub fn recreate_framebuffers(&mut self, device: &ash::Device, render_pass: vk::RenderPass, image_views: &Vec<vk::ImageView>, extent: vk::Extent2D) {
         let framebuffers = AshBuffers::create_framebuffers(
             device,
@@ -284,12 +283,73 @@ pub fn _record_command_buffers(
     }
 
 }
+pub fn create_vertex_buffer_from_triangle(
+    context: &AshContext,
+    device: &ash::Device,
+    triangle: &TriangleComponent
+) -> (vk::Buffer, vk::DeviceMemory) {
+    let vertex_buffer_create_info = vk::BufferCreateInfo::builder()
+        .size(std::mem::size_of_val(&triangle.verticies) as u64)
+        .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE)
+        //.queue_family_indices(0)
+        .build();
+    let vertex_buffer = unsafe {
+        device
+            .create_buffer(&vertex_buffer_create_info, None)
+            .expect("Failed to create Vertex Buffer")
+    };
+    let mem_requirements = unsafe { device.get_buffer_memory_requirements(vertex_buffer) };
+    let mem_properties =
+        unsafe { context.instance.get_physical_device_memory_properties(context.physical_device) };
+    let required_memory_flags: vk::MemoryPropertyFlags =
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
+    let memory_type = find_memory_type(
+        mem_requirements.memory_type_bits,
+        required_memory_flags,
+        mem_properties,
+    );
+
+    let allocate_info = vk::MemoryAllocateInfo::builder()
+        .allocation_size(mem_requirements.size)
+        .memory_type_index(memory_type)
+        .build();
+
+    let vertex_buffer_memory = unsafe {
+        device
+            .allocate_memory(&allocate_info, None)
+            .expect("Failed to allocate vertex buffer memory!")
+    };
+
+    unsafe {
+        device
+            .bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)
+            .expect("Failed to bind Buffer");
+
+        let data_ptr = device
+            .map_memory(
+                vertex_buffer_memory,
+                0,
+                vertex_buffer_create_info.size,
+                vk::MemoryMapFlags::empty(),
+            )
+            .expect("Failed to Map Memory") as *mut Vertex2d;
+
+        data_ptr.copy_from_nonoverlapping(triangle.verticies.as_ptr(), triangle.verticies.len());
+
+        device.unmap_memory(vertex_buffer_memory);
+    }
+
+    (vertex_buffer, vertex_buffer_memory)
+
+
+}
 
 pub fn create_vertex_buffer(
     instance: &ash::Instance,
     device: &ash::Device,
     physical_device: vk::PhysicalDevice,
-    vertices_data: &Vec<structures::Vertex>
+    vertices_data: &Vec<Vertex2d>
 ) -> (vk::Buffer, vk::DeviceMemory) {
     let vertex_buffer_create_info = vk::BufferCreateInfo::builder()
         .size(std::mem::size_of_val(vertices_data) as u64)
@@ -337,7 +397,7 @@ pub fn create_vertex_buffer(
                 vertex_buffer_create_info.size,
                 vk::MemoryMapFlags::empty(),
             )
-            .expect("Failed to Map Memory") as *mut structures::Vertex;
+            .expect("Failed to Map Memory") as *mut Vertex2d;
 
         data_ptr.copy_from_nonoverlapping(vertices_data.as_ptr(), vertices_data.len());
 

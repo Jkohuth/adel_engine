@@ -1,69 +1,55 @@
 
-
-use adel::renderer_ash::RendererAsh;
-use winit::{
-    event_loop::EventLoop,
-    window::{
-        WindowBuilder,
-        Window
-    }
-};
-
-use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
-use winit::event_loop::{ControlFlow};
+use adel::app::Application;
+use adel::ecs::World;
+use adel::input::KeyboardComponent;
+use adel::renderer_ash::definitions::{TransformComponent, TriangleComponent, Vertex2d};
+use nalgebra::{Vector2, Vector3};
 
 fn main() {
 
     simple_logger::SimpleLogger::new().env().init().unwrap();
-    let event_loop: EventLoop<()> = EventLoop::new();
-    let mut window = WindowBuilder::new()
-            .with_title("Test Window")
-            .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
-            .build(&event_loop)
-            .expect("Failed: Create window");
-    let mut vulkan_app = RendererAsh::new(window);
-    main_loop(vulkan_app, event_loop);
+    let mut world: World = World::new();
+    let triangle_entity = world.new_entity();
+    let triangle = vec![
+        Vertex2d { position: Vector2::new(0.0, -1.0), color: Vector3::new(0.0, 1.0, 0.0)},
+        Vertex2d { position: Vector2::new(0.5, 0.5), color: Vector3::new(1.0, 0.0, 0.0)},
+        Vertex2d { position: Vector2::new(0.0, 0.5), color: Vector3::new(0.0, 0.0, 1.0)},
+
+    ];
+    let transform = TransformComponent::new(
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.0, 0.0, 0.0)
+    );
+
+    let camera_controller_transform: TransformComponent = TransformComponent::new(
+        Vector3::new(0.0, 0.0, -2.0),
+        Vector3::new(1.0, 1.0, 1.0),
+        Vector3::new(0.0, 0.0, 0.0),
+    );
+    let triangle_entity2 = world.new_entity();
+    let triangle2 = vec![
+        Vertex2d { position: Vector2::new(-1.0, -1.0), color: Vector3::new(0.0, 1.0, 0.0)},
+        Vertex2d { position: Vector2::new(0.0, 1.0), color: Vector3::new(0.0, 1.0, 0.0)},
+        Vertex2d { position: Vector2::new(-1.0, 1.0), color: Vector3::new(0.0, 0.0, 1.0)},
+
+    ];
+    let transform2 = TransformComponent::new(
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.0, 0.0, 0.0)
+    );
+
+    let triangle_component = TriangleComponent::new(triangle);
+    world.add_component_to_entity(triangle_entity, triangle_component);
+    world.add_component_to_entity(triangle_entity, transform);
+    let triangle_component2 = TriangleComponent::new(triangle2);
+    world.add_component_to_entity(triangle_entity2, triangle_component2);
+    world.add_component_to_entity(triangle_entity2, transform2);
+    let camera_entity = world.new_entity();
+    world.add_component_to_entity(camera_entity, camera_controller_transform);
+    world.add_component_to_entity(camera_entity, KeyboardComponent);
+    let random_entity = world.new_entity();
+    let app = Application::new(world);
+    app.main_loop();
 }
-
-    pub fn main_loop(mut app: RendererAsh, event_loop: EventLoop<()>) {
-
-        event_loop.run(move |event, _, control_flow| {
-
-            match event {
-                | Event::WindowEvent { event, .. } => {
-                    match event {
-                        | WindowEvent::CloseRequested => {
-                            *control_flow = ControlFlow::Exit
-                        },
-                        | WindowEvent::KeyboardInput { input, .. } => {
-                            match input {
-                                | KeyboardInput { virtual_keycode, state, .. } => {
-                                    match (virtual_keycode, state) {
-                                        | (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                            *control_flow = ControlFlow::Exit
-                                        },
-                                        | _ => {},
-                                    }
-                                },
-                            }
-                        },
-                        | _ => {},
-                    }
-                },
-                | Event::MainEventsCleared => {
-                    app.window.request_redraw();
-                },
-                | Event::RedrawRequested(_window_id) => {
-                    app.draw_frame();
-                },
-                | Event::LoopDestroyed => {
-                    unsafe {
-                        app.device.device_wait_idle()
-                            .expect("Failed to wait device idle!")
-                    };
-                },
-                _ => (),
-            }
-
-        })
-    }

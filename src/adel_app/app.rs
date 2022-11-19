@@ -5,7 +5,9 @@ use crate::adel_ecs::System;
 use crate::adel_winit::WinitWindow;
 use crate::adel_camera::Camera;
 use crate::adel_input::{ KeyboardHandler, InputConsumer };
+use crate::adel_renderer_ash::RendererAsh;
 use glam::{Vec3};
+use nalgebra::Vector3;
 use std::collections::HashSet;
 use std::time;
 #[allow(unused_imports)]
@@ -31,6 +33,7 @@ impl Application {
     pub fn new(mut world: World) -> Self {
         let mut winit_window = WinitWindow::new();
         let event_loop: EventLoop<()> = winit_window.event_loop().unwrap();
+        let renderer_ash = RendererAsh::new(winit_window);
         //let renderer = VulkanoRenderer::new(winit_window.window().unwrap());
         // Create the input Consumer and keyboard handler
         let keyboard_handler = KeyboardHandler::new();
@@ -40,14 +43,15 @@ impl Application {
         //camera.set_perspective_projection((50.0f32).to_radians(), renderer.vulkano_window().aspect_ratio(), 0.1, 10.0);
         //camera.set_view_direction(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.1, 0.0, 1.0), None);
         //camera.set_view_target(Vec3::new(-1.0, 2.0, -2.0), Vec3::new(0.0, 0.0, 2.5), None);
-        camera.set_view_yxz(Vec3::new(-1.0, 2.0, -2.0),
-        Vec3::new(0.0, 0.0, 0.0));
+        // The current lack of depth buffering effects whether it can be rendered
+        //camera.set_view_yxz(Vector3::new(0.0, 0.0, 0.0),
+        //        Vector3::new(0.0, 0.0, 0.0));
         world.insert_resource::<InputConsumer>(input_consumer);
         world.insert_resource::<Camera>(camera);
         //log::info!("What is the value {:?}", keyboard.pressed);
         let mut systems: Vec<Box<dyn System>> = Vec::new();
         systems.push(Box::new(keyboard_handler));
-        //systems.push(Box::new(renderer));
+        systems.push(Box::new(renderer_ash));
         Self {
             world,
             systems,
@@ -81,9 +85,12 @@ impl Application {
                         ..
                     } => *control_flow = ControlFlow::Exit,
                     WindowEvent::KeyboardInput { ref input, .. } => {
-                        //log::info!("Storing Keyboard Input");
                         if let Some(mut keyboard_input) = self.world.get_resource_mut::<InputConsumer>() {
                             keyboard_input.keyboard_input_system(input);
+                        }
+                        // Special casing is bad design, but I'll leave this for now
+                        if input.virtual_keycode.unwrap() == VirtualKeyCode::Escape {
+                            *control_flow = ControlFlow::Exit;
                         }
                     },
                     _ => {
@@ -109,9 +116,22 @@ impl Application {
                     for i in &mut self.systems {
                         i.as_mut().run(&mut self.world);
                     }
-                }
+                    // Currently all the systems are ran in order
+                    //
+                    // Perhaps request redraw here
+                    //renderer_ash.window_ref().unwrap().request_redraw();
+
+                } Event::RedrawRequested(_window_id) => {
+                    // Redraw frame
+
+                },
                 Event::RedrawEventsCleared => {
 
+                },
+                Event::LoopDestroyed => {
+                    for i in &mut self.systems {
+                        i.as_mut().shutdown(&mut self.world);
+                    }
                 }
                 _ => (),
             }

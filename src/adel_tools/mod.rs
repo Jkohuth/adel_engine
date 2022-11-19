@@ -9,8 +9,14 @@ macro_rules! offset_of {
         }
     }};
 }
+pub unsafe fn as_bytes<T: Sized>(p: &T) -> &[u8] {
+    ::std::slice::from_raw_parts(
+        (p as *const T) as *const u8,
+        std::mem::size_of::<T>()
+    )
+}
 
-pub mod utility;
-mod renderer;
+pub fn print_type_of<T>(_: &T) {
+    log::info!("T is of Type {:?}", std::any::type_name::<T>());
+}
 
-pub use renderer::*;

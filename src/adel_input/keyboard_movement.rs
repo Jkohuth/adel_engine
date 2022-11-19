@@ -7,8 +7,9 @@ use winit::{
 use crate::adel_input::InputConsumer;
 use crate::adel_ecs::{System, World};
 //use crate::adel_renderer::TransformComponent;
-use glam::{Vec3};
+
 use crate::adel_camera::Camera;
+use crate::adel_renderer_ash::definitions::TransformComponent;
 // This class will be a struct that contains the current input variables
 // Which keys and which state shall be contained in this class
 // Other Classes need to reference this class in order to update accordingly
@@ -32,7 +33,21 @@ impl KeyboardHandler {
 }
 
 impl System for KeyboardHandler {
-    fn startup(&mut self, _world: &mut World) {}
+    fn startup(&mut self, world: &mut World) {
+        let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
+        let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
+        for i in input_ref.iter().enumerate() {
+            // _input_entity is used to track that this entity at this position in the Component Array exists
+            if let Some(_input_entity) = i.1 {
+                if let Some(camera_transform) = &mut transform_ref[i.0] {
+                    //log::info!("Post move camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
+                    let mut camera = world.get_resource_mut::<Camera>().unwrap();
+                    camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
+                    //camera.set_orthographic_projection(-1.0, 1.0, 1.0, -1.0, -1.0, 10.0);
+                }
+            }
+        }
+    }
 
     fn run(&mut self, world: &mut World) {
         let input_consumer = world.get_resource::<InputConsumer>().unwrap();
@@ -41,7 +56,7 @@ impl System for KeyboardHandler {
         if input_consumer.pressed.is_empty() {
             return;
         }
-/*
+
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
 
@@ -58,22 +73,21 @@ impl System for KeyboardHandler {
                 }
             }
         }
-        */
     }
+
+    fn shutdown(&mut self, world: &mut World) {}
     fn name(&self) -> &str {
         self.name
     }
 }
 
-pub fn print_type_of<T>(_: &T) {
-    log::info!("T is of Type {:?}", std::any::type_name::<T>());
-}
 static LOOK_SPEED: f32 = 1.5;
 static MOVE_SPEED: f32 = 3.0;
 
-fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32) { // camera_transform: &mut TransformComponent) {
-/*
-    let mut rotate = Vec3::new(0.0, 0.0, 0.0);
+use nalgebra::Vector3;
+fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &mut TransformComponent) {
+
+    let mut rotate = Vector3::new(0.0, 0.0, 0.0);
     // Look Right
     if keys.contains(&VirtualKeyCode::Right) {
         rotate.y += 1.0;
@@ -90,7 +104,7 @@ fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32) { // camera_transfo
     if keys.contains(&VirtualKeyCode::Down) {
         rotate.x -= 1.0;
     }
-    if Vec3::dot(rotate, rotate) > f32::EPSILON {
+    if Vector3::dot(&rotate, &rotate) > f32::EPSILON {
         camera_transform.rotation += LOOK_SPEED * dt * rotate.normalize();
     }
 
@@ -98,10 +112,10 @@ fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32) { // camera_transfo
     camera_transform.rotation.y = camera_transform.rotation.y % (2.0*std::f32::consts::PI);
 
     let yaw = camera_transform.rotation.y;
-    let forward_dir = Vec3::new(yaw.sin(), 0.0, yaw.cos());
-    let right_dir = Vec3::new(forward_dir.z, 0.0, -forward_dir.x);
-    let up_dir = Vec3::new(0.0, -1.0, 0.0);
-    let mut move_dir = Vec3::new(0.0, 0.0, 0.0);
+    let forward_dir = Vector3::new(yaw.sin(), 0.0, yaw.cos());
+    let right_dir = Vector3::new(forward_dir.z, 0.0, -forward_dir.x);
+    let up_dir = Vector3::new(0.0, -1.0, 0.0);
+    let mut move_dir = Vector3::new(0.0, 0.0, 0.0);
 
     // Move forward
     if keys.contains(&VirtualKeyCode::W) {
@@ -127,8 +141,8 @@ fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32) { // camera_transfo
     if keys.contains(&VirtualKeyCode::Q) {
         move_dir -= up_dir;
     }
-    if Vec3::dot(move_dir, move_dir) > f32::EPSILON {
+    if Vector3::dot(&move_dir, &move_dir) > f32::EPSILON {
         camera_transform.translation += MOVE_SPEED * dt * move_dir.normalize();
     }
-*/
+
 }

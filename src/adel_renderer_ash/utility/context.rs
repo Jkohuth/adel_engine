@@ -2,7 +2,7 @@ use ash::vk;
 use std::ffi::CString;
 
 use winit::window::Window;
-use crate::adel_renderer_vulkan::utility::{
+use super::{
     structures::{
         SurfaceInfo,
         QueueFamilyIndices,

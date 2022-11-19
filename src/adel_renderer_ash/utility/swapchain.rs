@@ -1,7 +1,6 @@
 use ash::vk;
 use winit::window::Window;
 use log;
-use super::structures;
 use super::structures::SurfaceInfo;
 use super::context::AshContext;
 
@@ -114,7 +113,7 @@ impl AshSwapchain {
             image_count
         };
 
-        let (image_sharing_mode, queue_family_index_count, queue_family_indices) =
+        let (_image_sharing_mode, _queue_family_index_count, queue_family_indices) =
             if context.queue_family.graphics_family != context.queue_family.present_family {
                 (
                     vk::SharingMode::CONCURRENT,
