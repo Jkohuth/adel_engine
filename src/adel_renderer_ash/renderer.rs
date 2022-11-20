@@ -393,7 +393,7 @@ impl System for RendererAsh {
                 match triangle.1 {
                     Some(triangle_component) => {
                         // TODO: Rename these variables
-                        let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer_from_triangle(&self.context, &self.device, triangle_component);
+                        let (vertex_buffer, vertex_buffer_memory) = buffers::AshBuffers::create_vertex_buffer(&self.context, &self.device, triangle_component);
                         let vertex_buf: VertexBuffer = VertexBuffer { buffer: vertex_buffer, memory: vertex_buffer_memory };
                         vert_buffer_component_vec.push(Some(vertex_buf));
                     }, None => {

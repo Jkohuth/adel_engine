@@ -12,6 +12,7 @@ pub struct AshBuffers {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub command_pool: vk::CommandPool,
     pub command_buffers: Vec<vk::CommandBuffer>,
+    graphics_queue: vk::Queue,
 }
 impl AshBuffers {
     pub fn new(device: &ash::Device, context: &AshContext, swapchain: &AshSwapchain, pipeline: &AshPipeline) -> Self {
@@ -27,6 +28,7 @@ impl AshBuffers {
             framebuffers,
             command_pool,
             command_buffers,
+            graphics_queue: swapchain.graphics_queue.clone(),
         }
     }
     fn create_framebuffers(
@@ -96,103 +98,6 @@ impl AshBuffers {
     pub fn begin_frame() {
 
     }
-
-/*    fn create_command_buffers_(
-        device: &ash::Device,
-        command_pool: vk::CommandPool,
-        graphics_pipeline: vk::Pipeline,
-        framebuffers: &Vec<vk::Framebuffer>,
-        render_pass: vk::RenderPass,
-        surface_extent: vk::Extent2D,
-        vertex_buffer: vk::Buffer,
-        push_constant_data: &structures::PushConstantData,
-        layout: vk::PipelineLayout,
-    ) -> Vec<vk::CommandBuffer> {
-        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(command_pool)
-            .command_buffer_count(framebuffers.len() as u32)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .build();
-
-        let command_buffers = unsafe {
-            device
-                .allocate_command_buffers(&command_buffer_allocate_info)
-                .expect("Failed to allocate Command Buffers!")
-        };
-        let viewport = [vk::Viewport::builder()
-            .x(0.0)
-            .y(0.0)
-            .width(surface_extent.width as f32)
-            .height(surface_extent.height as f32)
-            .min_depth(0.0)
-            .max_depth(1.0)
-            .build()];
-
-        let scissors = [vk::Rect2D::builder()
-            .offset(vk::Offset2D::builder()
-                        .x(0).y(0).build())
-            .extent(surface_extent)
-            .build()];
-        for (i, &command_buffer) in command_buffers.iter().enumerate() {
-            let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
-                .build();
-
-            unsafe {
-                device
-                    .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-                    .expect("Failed to begin recording Command Buffer at beginning!");
-            }
-
-            let clear_values = [vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 1.0],
-                },
-            }];
-
-            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                .render_pass(render_pass)
-                .render_area(vk::Rect2D::builder()
-                    .offset(vk::Offset2D { x: 0, y: 0})
-                    .extent(surface_extent)
-                    .build()
-                ).clear_values(&clear_values)
-                .framebuffer(framebuffers[i])
-                .build();
-
-
-
-            unsafe {
-                let push_data = structures::as_bytes(push_constant_data);
-                device.cmd_begin_render_pass(
-                    command_buffer,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE,
-                );
-                device.cmd_bind_pipeline(
-                    command_buffer,
-                    vk::PipelineBindPoint::GRAPHICS,
-                    graphics_pipeline,
-                );
-                let vertex_buffers = [vertex_buffer];
-                let offsets = [0_u64];
-                device.cmd_set_viewport(command_buffer, 0, &viewport);
-                device.cmd_set_scissor(command_buffer, 0, &scissors);
-                device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
-                device.cmd_push_constants(command_buffer, layout, vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT, 0, &push_data);
-
-                device.cmd_draw(command_buffer, 3, 1, 0, 0);
-
-                device.cmd_end_render_pass(command_buffer);
-
-                device
-                    .end_command_buffer(command_buffer)
-                    .expect("Failed to record Command Buffer at Ending!");
-            }
-        }
-        command_buffers
-    }
-*/
     pub fn recreate_framebuffers(&mut self, device: &ash::Device, render_pass: vk::RenderPass, image_views: &Vec<vk::ImageView>, extent: vk::Extent2D) {
         let framebuffers = AshBuffers::create_framebuffers(
             device,
@@ -220,6 +125,123 @@ impl AshBuffers {
 
     pub fn commandbuffers(&self) -> &Vec<vk::CommandBuffer> {
         &self.command_buffers
+    }
+    pub fn create_buffer(context: &AshContext, device: &ash::Device, device_size: vk::DeviceSize,
+        usage: vk::BufferUsageFlags, properties: vk::MemoryPropertyFlags)
+        -> (vk::Buffer, vk::DeviceMemory) {
+        let buffer_create_info = vk::BufferCreateInfo::builder()
+            .size(device_size)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            //.queue_family_indices(0)
+            .build();
+
+        let buffer = unsafe {
+            device
+                .create_buffer(&buffer_create_info, None)
+                .expect("Failed to create Buffer")
+        };
+        let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+        let mem_properties =
+            unsafe { context.instance.get_physical_device_memory_properties(context.physical_device) };
+        let memory_type = find_memory_type(
+            mem_requirements.memory_type_bits,
+            properties,
+            mem_properties,
+        );
+
+        let allocate_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(mem_requirements.size)
+            .memory_type_index(memory_type)
+            .build();
+
+        let buffer_memory = unsafe {
+            device
+                .allocate_memory(&allocate_info, None)
+                .expect("Failed to allocate vertex buffer memory!")
+        };
+
+        unsafe {
+            device
+                .bind_buffer_memory(buffer, buffer_memory, 0)
+                .expect("Failed to bind Buffer");
+        }
+        (buffer, buffer_memory)
+    }
+
+    pub fn create_vertex_buffer(context: &AshContext, device: &ash::Device, triangle :&TriangleComponent)
+        -> (vk::Buffer, vk::DeviceMemory) {
+        let buffer_size = std::mem::size_of_val(&triangle.verticies) as vk::DeviceSize;
+        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
+            vk::BufferUsageFlags::TRANSFER_SRC, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT);
+
+        unsafe {
+            let data_ptr = device
+                .map_memory(
+                    staging_buffer_memory,
+                    0,
+                    buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("Failed to Map Memory") as *mut Vertex2d;
+
+            data_ptr.copy_from_nonoverlapping(triangle.verticies.as_ptr(), triangle.verticies.len());
+
+            device.unmap_memory(staging_buffer_memory);
+        }
+        let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER, vk::MemoryPropertyFlags::DEVICE_LOCAL);
+        // copy_buffer
+        unsafe {
+            device.destroy_buffer(staging_buffer, None);
+            device.free_memory(staging_buffer_memory, None);
+        }
+        (vertex_buffer, vertex_buffer_memory)
+    }
+
+    fn copy_buffer(&self, device: &ash::Device, src_buffer: vk::Buffer, dst_buffer: vk::Buffer, size: vk::DeviceSize) {
+        let alloc_info = vk::CommandBufferAllocateInfo::builder()
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_pool(self.command_pool)
+            .command_buffer_count(1)
+            .build();
+
+        let command_buffers = unsafe {
+            device.allocate_command_buffers(&alloc_info).expect("Failed to allocate command buffer")
+        };
+        assert_eq!(command_buffers.len(), 1);
+        let begin_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+            .build();
+
+        let copy_region = [vk::BufferCopy::builder()
+            .size(size)
+            .build()];
+
+        let fence_create_info = vk::FenceCreateInfo::builder()
+            .flags(vk::FenceCreateFlags::SIGNALED)
+            .build();
+        unsafe {
+            device.begin_command_buffer(command_buffers[0], &begin_info).expect("Failed to begin command buffer");
+            device.cmd_copy_buffer(command_buffers[0], src_buffer, dst_buffer, &copy_region);
+            device.end_command_buffer(command_buffers[0]).expect("Failed to begin command buffer");
+        };
+
+        let inflight_fence = unsafe {
+                device
+                    .create_fence(&fence_create_info, None)
+                    .expect("Failed to create Fence Object!")
+        };
+        // Now that the command buffer has the copy command loaded, execute it
+        let submit_info = [vk::SubmitInfo::builder()
+            .command_buffers(&command_buffers)
+            .build()];
+
+        unsafe {
+            device.queue_submit(self.graphics_queue, &submit_info, inflight_fence).expect("Failed to submit copy buffer to queue");
+            device.wait_for_fences(&[inflight_fence], true, u64::MAX).expect("Failed waiting for fences during copy buffer");
+            device.free_command_buffers(self.command_pool, &command_buffers);
+        }
     }
 }
 
@@ -281,6 +303,7 @@ pub fn _record_command_buffers(
                 .expect("Failed to record Command Buffer at Ending!");
         }
     }
+
 
 }
 pub fn create_vertex_buffer_from_triangle(
@@ -345,7 +368,7 @@ pub fn create_vertex_buffer_from_triangle(
 
 }
 
-pub fn create_vertex_buffer(
+pub fn create_vertex_buffer_bak(
     instance: &ash::Instance,
     device: &ash::Device,
     physical_device: vk::PhysicalDevice,
