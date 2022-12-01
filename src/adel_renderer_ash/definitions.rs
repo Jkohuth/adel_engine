@@ -38,6 +38,12 @@ pub struct PushConstantData {
     pub transform: nalgebra::Matrix4<f32>,
     pub color: nalgebra::Vector3<f32>
 }
+#[repr(C)]
+#[derive(Debug)]
+pub struct PushConstantData2D {
+    pub transform: nalgebra::Matrix2<f32>,
+    pub color: nalgebra::Vector3<f32>
+}
 #[derive(Debug)]
 pub struct TransformComponent {
     pub translation: Vector3<f32>,

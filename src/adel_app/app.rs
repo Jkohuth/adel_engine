@@ -46,11 +46,11 @@ impl Application {
         // The current lack of depth buffering effects whether it can be rendered
         //camera.set_view_yxz(Vector3::new(0.0, 0.0, 0.0),
         //        Vector3::new(0.0, 0.0, 0.0));
-        world.insert_resource::<InputConsumer>(input_consumer);
-        world.insert_resource::<Camera>(camera);
+        //world.insert_resource::<InputConsumer>(input_consumer);
+        //world.insert_resource::<Camera>(camera);
         //log::info!("What is the value {:?}", keyboard.pressed);
         let mut systems: Vec<Box<dyn System>> = Vec::new();
-        systems.push(Box::new(keyboard_handler));
+        //systems.push(Box::new(keyboard_handler));
         systems.push(Box::new(renderer_ash));
         Self {
             world,
@@ -92,6 +92,7 @@ impl Application {
                         if input.virtual_keycode.unwrap() == VirtualKeyCode::Escape {
                             *control_flow = ControlFlow::Exit;
                         }
+
                     },
                     _ => {
                         // Need to pass the pressed variable into a keyboard class

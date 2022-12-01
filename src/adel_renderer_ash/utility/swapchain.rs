@@ -60,7 +60,7 @@ impl AshSwapchain {
                     vk::PresentModeKHR::IMMEDIATE => 3,
                     _ => panic!("ERROR: Unknown present mode found {:?}", present_mode)
         }).unwrap();
-        log::info!("Present mode: {:?}", &available_present_mode);
+        //log::info!("Present mode: {:?}", &available_present_mode);
         *available_present_mode
     }
 

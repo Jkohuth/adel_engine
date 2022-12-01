@@ -11,8 +11,9 @@ use super::constants::MAX_FRAMES_IN_FLIGHT;
 pub struct AshBuffers {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub command_pool: vk::CommandPool,
+    transient_command_pool: vk::CommandPool,
     pub command_buffers: Vec<vk::CommandBuffer>,
-    graphics_queue: vk::Queue,
+    transient_queue: vk::Queue,
 }
 impl AshBuffers {
     pub fn new(device: &ash::Device, context: &AshContext, swapchain: &AshSwapchain, pipeline: &AshPipeline) -> Self {
@@ -22,13 +23,15 @@ impl AshBuffers {
             &swapchain.image_views,
             swapchain.extent()
         );
-        let command_pool = AshBuffers::create_command_pool(&device, &context.queue_family);
+        let command_pool = AshBuffers::create_command_pool(&device, &context.queue_family, vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+        let transient_command_pool = AshBuffers::create_command_pool(&device, &context.queue_family, vk::CommandPoolCreateFlags::TRANSIENT);
         let command_buffers = AshBuffers::create_command_buffers(&device, command_pool);
         Self {
             framebuffers,
             command_pool,
+            transient_command_pool,
             command_buffers,
-            graphics_queue: swapchain.graphics_queue.clone(),
+            transient_queue: swapchain.graphics_queue.clone(),
         }
     }
     fn create_framebuffers(
@@ -65,9 +68,10 @@ impl AshBuffers {
     fn create_command_pool(
         device: &ash::Device,
         queue_families: &structures::QueueFamilyIndices,
+        flags: vk::CommandPoolCreateFlags,
     ) -> vk::CommandPool {
         let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .flags(flags)
             .queue_family_index(queue_families.graphics_family.unwrap())
             .build();
 
@@ -115,8 +119,9 @@ impl AshBuffers {
     pub unsafe fn free_command_buffers(&mut self, device: &ash::Device) {
         device.free_command_buffers(self.command_pool, &self.command_buffers);
     }
-    pub unsafe fn destroy_command_pool(&mut self, device: &ash::Device) {
+    pub unsafe fn destroy_command_pools(&mut self, device: &ash::Device) {
         device.destroy_command_pool(self.command_pool, None);
+        device.destroy_command_pool(self.transient_command_pool, None);
     }
 
     pub fn framebuffers(&self) -> &Vec<vk::Framebuffer> {
@@ -169,9 +174,11 @@ impl AshBuffers {
         (buffer, buffer_memory)
     }
 
-    pub fn create_vertex_buffer(context: &AshContext, device: &ash::Device, triangle :&TriangleComponent)
+    pub fn create_vertex_buffer(&self, context: &AshContext, device: &ash::Device, triangle :&TriangleComponent)
         -> (vk::Buffer, vk::DeviceMemory) {
-        let buffer_size = std::mem::size_of_val(&triangle.verticies) as vk::DeviceSize;
+        //let buffer_size = std::mem::size_of_val(&triangle.verticies) as vk::DeviceSize;
+        let buffer_size = (triangle.verticies.len() * std::mem::size_of::<Vertex2d>()) as vk::DeviceSize;
+        //log::info!("JAKOB buffer 1 {:?} buffer 2 {:?}", buffer_size, buffer_size2);
         let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
             vk::BufferUsageFlags::TRANSFER_SRC, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT);
 
@@ -191,18 +198,20 @@ impl AshBuffers {
         }
         let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER, vk::MemoryPropertyFlags::DEVICE_LOCAL);
-        // copy_buffer
+        self.copy_buffer(device, &staging_buffer, &vertex_buffer, buffer_size);
+
         unsafe {
             device.destroy_buffer(staging_buffer, None);
             device.free_memory(staging_buffer_memory, None);
         }
+
         (vertex_buffer, vertex_buffer_memory)
     }
 
-    fn copy_buffer(&self, device: &ash::Device, src_buffer: vk::Buffer, dst_buffer: vk::Buffer, size: vk::DeviceSize) {
+    fn copy_buffer(&self, device: &ash::Device, src_buffer: &vk::Buffer, dst_buffer: &vk::Buffer, size: vk::DeviceSize) {
         let alloc_info = vk::CommandBufferAllocateInfo::builder()
             .level(vk::CommandBufferLevel::PRIMARY)
-            .command_pool(self.command_pool)
+            .command_pool(self.transient_command_pool)
             .command_buffer_count(1)
             .build();
 
@@ -215,97 +224,31 @@ impl AshBuffers {
             .build();
 
         let copy_region = [vk::BufferCopy::builder()
+            .src_offset(0)
+            .dst_offset(0)
             .size(size)
             .build()];
 
-        let fence_create_info = vk::FenceCreateInfo::builder()
-            .flags(vk::FenceCreateFlags::SIGNALED)
-            .build();
         unsafe {
             device.begin_command_buffer(command_buffers[0], &begin_info).expect("Failed to begin command buffer");
-            device.cmd_copy_buffer(command_buffers[0], src_buffer, dst_buffer, &copy_region);
+            device.cmd_copy_buffer(command_buffers[0], *src_buffer, *dst_buffer, &copy_region);
             device.end_command_buffer(command_buffers[0]).expect("Failed to begin command buffer");
         };
 
-        let inflight_fence = unsafe {
-                device
-                    .create_fence(&fence_create_info, None)
-                    .expect("Failed to create Fence Object!")
-        };
         // Now that the command buffer has the copy command loaded, execute it
         let submit_info = [vk::SubmitInfo::builder()
             .command_buffers(&command_buffers)
             .build()];
 
         unsafe {
-            device.queue_submit(self.graphics_queue, &submit_info, inflight_fence).expect("Failed to submit copy buffer to queue");
-            device.wait_for_fences(&[inflight_fence], true, u64::MAX).expect("Failed waiting for fences during copy buffer");
-            device.free_command_buffers(self.command_pool, &command_buffers);
+            // Fences may also be used here to submit multiple commands at once
+            device.queue_submit(self.transient_queue, &submit_info, vk::Fence::null()).expect("Failed to submit copy buffer to queue");
+            device.queue_wait_idle(self.transient_queue).expect("Failed for device to wait idle");
+            device.free_command_buffers(self.transient_command_pool, &command_buffers);
         }
     }
 }
 
-pub fn _record_command_buffers(
-    device: &ash::Device,
-    command_buffers: &Vec<vk::CommandBuffer>,
-    render_pass: vk::RenderPass,
-    surface_extent: vk::Extent2D,
-    graphics_pipeline: vk::Pipeline,
-    framebuffers: &Vec<vk::Framebuffer>
-) {
-
-    for (i, &command_buffer) in command_buffers.iter().enumerate() {
-        let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
-            .build();
-
-        unsafe {
-            device
-                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-                .expect("Failed to begin recording Command Buffer at beginning!");
-        }
-
-        let clear_values = [vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        }];
-
-        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(render_pass)
-            .render_area(vk::Rect2D::builder()
-                .offset(vk::Offset2D { x: 0, y: 0})
-                .extent(surface_extent)
-                .build()
-            ).clear_values(&clear_values)
-            .framebuffer(framebuffers[i])
-            .build();
-
-        unsafe {
-            device.cmd_begin_render_pass(
-                command_buffer,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            );
-            device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                graphics_pipeline,
-            );
-
-
-            device.cmd_draw(command_buffer, 3, 1, 0, 0);
-
-            device.cmd_end_render_pass(command_buffer);
-
-            device
-                .end_command_buffer(command_buffer)
-                .expect("Failed to record Command Buffer at Ending!");
-        }
-    }
-
-
-}
 pub fn create_vertex_buffer_from_triangle(
     context: &AshContext,
     device: &ash::Device,

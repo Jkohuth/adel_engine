@@ -24,6 +24,7 @@ use crate::adel_renderer_ash::utility::{
 use super::definitions::{
     create_push_constant_data,
     PushConstantData,
+    PushConstantData2D,
     TransformComponent,
     TriangleComponent,
     Vertex2d,
@@ -100,7 +101,8 @@ impl RendererAsh {
 }
 
 impl RendererAsh {
-    pub fn draw_frame(&mut self, vertex_buffers: Vec<(vk::Buffer, PushConstantData)>) {
+    pub fn draw_frame(&mut self, vertex_buffers: Vec<(vk::Buffer, PushConstantData2D)>) {
+    //pub fn draw_frame(&mut self, vertex_buffers: Vec<vk::Buffer>) {
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
 
@@ -197,7 +199,7 @@ impl RendererAsh {
         unsafe {
             self.device
                 .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
-            for buffer in vertex_buffers {
+            for buffer in vertex_buffers.iter() {
                 self.device
                     .cmd_bind_vertex_buffers(command_buffer,
                         0,
@@ -211,14 +213,6 @@ impl RendererAsh {
                         0,
                         as_bytes(&buffer.1)
                     );
-                //self.device
-                //    .cmd_push_constants(command_buffer,
-                //        self.pipeline.pipeline_layout(),
-                //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                //        0,
-                //        as_bytes(&self.push_const)
-                //    );
-
                 // TODO: Vertex count shouldn't be hardcoded but lets get this bread
                 self.device
                     .cmd_draw(command_buffer, 3, 1, 0, 0);
@@ -374,10 +368,16 @@ impl RendererAsh {
     }
 
 }
-use nalgebra::Matrix4;
+use nalgebra::{Matrix2, Matrix4};
 pub fn create_push_constant_data_proj(camera_projection : Matrix4<f32>) -> PushConstantData {
     PushConstantData {
-        transform: camera_projection,
+        transform: Matrix4::identity(), //camera_projection,
+        color: Vector3::new(0.0, 0.0, 0.0),
+    }
+}
+pub fn create_push_constant_data_2d() -> PushConstantData2D {
+    PushConstantData2D {
+        transform: Matrix2::identity(), //camera_projection,
         color: Vector3::new(0.0, 0.0, 0.0),
     }
 }
@@ -393,7 +393,9 @@ impl System for RendererAsh {
                 match triangle.1 {
                     Some(triangle_component) => {
                         // TODO: Rename these variables
-                        let (vertex_buffer, vertex_buffer_memory) = buffers::AshBuffers::create_vertex_buffer(&self.context, &self.device, triangle_component);
+                        let (vertex_buffer, vertex_buffer_memory) = self.buffers.create_vertex_buffer(&self.context, &self.device, triangle_component);
+                        //let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer_from_triangle(&self.context, &self.device, triangle_component);
+
                         let vertex_buf: VertexBuffer = VertexBuffer { buffer: vertex_buffer, memory: vertex_buffer_memory };
                         vert_buffer_component_vec.push(Some(vertex_buf));
                     }, None => {
@@ -402,7 +404,8 @@ impl System for RendererAsh {
                 }
             }
         }
-
+// x: 1395.4609375, y: 511.716552734375
+// x: 1395.74365234375, y: 1005.947509765625
         world.insert_component(vert_buffer_component_vec);
     }
     fn run(&mut self, world: &mut World) {
@@ -411,21 +414,25 @@ impl System for RendererAsh {
         // Apply the transformation matrix to it
         // iterate through all the transforms and apply the camera translation
         // draw frame
-        let camera = world.get_resource::<Camera>().unwrap();
-        let projection_matrix = camera.get_projection() * camera.get_view();
+        //let camera = world.get_resource::<Camera>().unwrap();
+        //let projection_matrix = camera.get_projection();// * camera.get_view();
         //let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
-        let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
+        //let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
         let vertex_option_buffers = world.borrow_component::<VertexBuffer>().unwrap();
-        let mut buffers_push_constant: Vec<(vk::Buffer, PushConstantData)> = Vec::new();
+        let mut buffers_push_constant: Vec<(vk::Buffer, PushConstantData2D)> = Vec::new();
         for i in vertex_option_buffers.iter().enumerate() {
             if let Some(buffer) = i.1 {
-                if let Some(transform) = &mut transform_ref[i.0] {
-                    buffers_push_constant.push((buffer.buffer.clone(),
+                    buffers_push_constant.push( (buffer.buffer.clone(),
                         //create_push_constant_data(projection_matrix, transform)));
-                        create_push_constant_data_proj(projection_matrix)));
-                }
+                        create_push_constant_data_2d()));
+                //if let Some(transform) = &mut transform_ref[i.0] {
+                //    buffers_push_constant.push((buffer.buffer.clone(),
+                //        //create_push_constant_data(projection_matrix, transform)));
+                //        create_push_constant_data_proj(projection_matrix)));
+                //}
             }
         }
+
         self.draw_frame(buffers_push_constant);
     }
     fn shutdown(&mut self, world: &mut World) {
@@ -458,7 +465,7 @@ impl Drop for RendererAsh {
             // Framebuffers need to be separated as they are removed when recreating swapchain
             self.buffers.destroy_framebuffers(&self.device);
             self.buffers.free_command_buffers(&self.device);
-            self.buffers.destroy_command_pool(&self.device);
+            self.buffers.destroy_command_pools(&self.device);
 
             // Destorys Swapchain and ImageViews
             self.swapchain.destroy_swapchain(&self.device);
