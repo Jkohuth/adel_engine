@@ -37,9 +37,7 @@ pub struct BufferComponent {
     pub vertex_buffer_memory: DeviceMemory,
     pub index_buffer: Buffer,
     pub index_buffer_memory: DeviceMemory,
-    pub indices: Vec<u16>,
-    // Im just looking to compile and call it a day here
-    pub push_const: PushConstantData2D
+    pub indices_count: u32,
 }
 // TODO: Create separate files for Vertex specific structs
 // TODO: Come up with a better name for this

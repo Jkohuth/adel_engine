@@ -91,12 +91,12 @@ impl AshPipeline {
     ) -> (vk::Pipeline, vk::PipelineLayout) {
 
         // Create Shader Modules
-        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/triangle.vert", vert, glsl, entry="main");
-        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/triangle.frag", frag, glsl, entry="main");
+        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/triangle.vert", vert, glsl, entry="main");
+        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/triangle.frag", frag, glsl, entry="main");
         //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.vert", vert, glsl, entry="main");
         //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.frag", frag, glsl, entry="main");
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.frag", frag, glsl, entry="main");
+        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.vert", vert, glsl, entry="main");
+        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.frag", frag, glsl, entry="main");
         let vert_shader = AshPipeline::create_shader_module(&device, vert_spv);
         let frag_shader = AshPipeline::create_shader_module(&device, frag_spv);
 

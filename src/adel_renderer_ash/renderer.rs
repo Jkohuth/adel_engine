@@ -104,7 +104,7 @@ impl RendererAsh {
 
 impl RendererAsh {
     // TODO: Break up this function
-    pub fn draw_frame(&mut self, buffers: Vec<&BufferComponent>) {
+    pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData2D)>) {
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
 
@@ -205,18 +205,18 @@ impl RendererAsh {
                 self.device
                     .cmd_bind_vertex_buffers(command_buffer,
                         0,
-                        &[buffer.vertex_buffer],
+                        &[buffer.0.vertex_buffer],
                         &device_size_offsets
                     );
-                self.device.cmd_bind_index_buffer(command_buffer, buffer.index_buffer, 0, vk::IndexType::UINT16);
+                self.device.cmd_bind_index_buffer(command_buffer, buffer.0.index_buffer, 0, vk::IndexType::UINT16);
                 self.device
                     .cmd_push_constants(command_buffer,
                         self.pipeline.pipeline_layout(),
                         vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                         0,
-                        as_bytes(&buffer.push_const)
+                        as_bytes(&buffer.1)
                     );
-                self.device.cmd_draw_indexed(command_buffer, buffer.indices.len() as u32, 1, 0, 0, 0);
+                self.device.cmd_draw_indexed(command_buffer, buffer.0.indices_count, 1, 0, 0, 0);
             }
         }
 
@@ -378,7 +378,7 @@ pub fn create_push_constant_data_proj(camera_projection : Matrix4<f32>) -> PushC
 pub fn create_push_constant_data_2d() -> PushConstantData2D {
     PushConstantData2D {
         transform: Matrix2::identity(), //camera_projection,
-        color: Vector3::new(0.0, 0.0, 0.0),
+        color: Vector3::new(0.0, 0.0, 1.0),
     }
 }
 
@@ -397,8 +397,7 @@ impl System for RendererAsh {
                         vertex_buffer_memory,
                         index_buffer,
                         index_buffer_memory,
-                        indices: component.indices.clone(),
-                        push_const: create_push_constant_data_2d()
+                        indices_count: component.indices.len() as u32,
                     };
                     buffer_component_vec.push(Some(buffer_component));
                 }
@@ -406,40 +405,15 @@ impl System for RendererAsh {
                     buffer_component_vec.push(None);
                 }
             }
-        //    // Borrow the vertices that have been supplied to the world
-        //    let triangles = world.borrow_component::<TriangleComponent>().unwrap_or(return);
-        //    for triangle in triangles.iter().enumerate() {
-        //        match triangle.1 {
-        //            Some(triangle_component) => {
-        //                // TODO: Rename these variables
-        //                let (vertex_buffer, vertex_buffer_memory) = self.buffers.create_vertex_buffer(&self.context, &self.device, triangle_component);
-        //                //let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer_from_triangle(&self.context, &self.device, triangle_component);
-
-        //                let vertex_buf: VertexBuffer = VertexBuffer { buffer: vertex_buffer, memory: vertex_buffer_memory };
-        //                vert_buffer_component_vec.push(Some(vertex_buf));
-        //            }, None => {
-        //                vert_buffer_component_vec.push(None);
-        //            }
-        //        }
-        //    }
         }
         world.insert_component(buffer_component_vec);
     }
     fn run(&mut self, world: &mut World) {
-        // Copied from adel_renderer(_vulkano)
-        // Get the camera projection
-        // Apply the transformation matrix to it
-        // iterate through all the transforms and apply the camera translation
-        // draw frame
-        //let camera = world.get_resource::<Camera>().unwrap();
-        //let projection_matrix = camera.get_projection();// * camera.get_view();
-        //let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
-        //let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
         let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
-        let mut buffers_push_constant: Vec<&BufferComponent> = Vec::new();
+        let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData2D)> = Vec::new();
         for i in option_buffers.iter() {
             if let Some(buffer) = i {
-                    buffers_push_constant.push(&buffer);
+                    buffers_push_constant.push((&buffer, create_push_constant_data_2d()));
             }
         }
 
