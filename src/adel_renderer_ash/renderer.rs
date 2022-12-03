@@ -22,11 +22,13 @@ use crate::adel_renderer_ash::utility::{
     sync::SyncObjects,
 };
 use super::definitions::{
+    BufferComponent,
     create_push_constant_data,
     PushConstantData,
     PushConstantData2D,
     TransformComponent,
     TriangleComponent,
+    VertexIndexComponent,
     Vertex2d,
     VertexBuffer,
 };
@@ -101,8 +103,8 @@ impl RendererAsh {
 }
 
 impl RendererAsh {
-    pub fn draw_frame(&mut self, vertex_buffers: Vec<(vk::Buffer, PushConstantData2D)>) {
-    //pub fn draw_frame(&mut self, vertex_buffers: Vec<vk::Buffer>) {
+    // TODO: Break up this function
+    pub fn draw_frame(&mut self, buffers: Vec<&BufferComponent>) {
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
 
@@ -199,24 +201,22 @@ impl RendererAsh {
         unsafe {
             self.device
                 .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
-            for buffer in vertex_buffers.iter() {
+            for buffer in buffers.iter() {
                 self.device
                     .cmd_bind_vertex_buffers(command_buffer,
                         0,
-                        &[buffer.0],
+                        &[buffer.vertex_buffer],
                         &device_size_offsets
                     );
+                self.device.cmd_bind_index_buffer(command_buffer, buffer.index_buffer, 0, vk::IndexType::UINT16);
                 self.device
                     .cmd_push_constants(command_buffer,
                         self.pipeline.pipeline_layout(),
                         vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                         0,
-                        as_bytes(&buffer.1)
+                        as_bytes(&buffer.push_const)
                     );
-                // TODO: Vertex count shouldn't be hardcoded but lets get this bread
-                self.device
-                    .cmd_draw(command_buffer, 3, 1, 0, 0);
-
+                self.device.cmd_draw_indexed(command_buffer, buffer.indices.len() as u32, 1, 0, 0, 0);
             }
         }
 
@@ -384,29 +384,46 @@ pub fn create_push_constant_data_2d() -> PushConstantData2D {
 
 impl System for RendererAsh {
     fn startup(&mut self, world: &mut World) {
-        let mut vert_buffer_component_vec: Vec<Option<VertexBuffer>> = Vec::new();
+        let mut buffer_component_vec: Vec<Option<BufferComponent>> = Vec::new();
 
         {
-            // Borrow the vertices that have been supplied to the world
-            let triangles = world.borrow_component::<TriangleComponent>().unwrap();
-            for triangle in triangles.iter().enumerate() {
-                match triangle.1 {
-                    Some(triangle_component) => {
-                        // TODO: Rename these variables
-                        let (vertex_buffer, vertex_buffer_memory) = self.buffers.create_vertex_buffer(&self.context, &self.device, triangle_component);
-                        //let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer_from_triangle(&self.context, &self.device, triangle_component);
-
-                        let vertex_buf: VertexBuffer = VertexBuffer { buffer: vertex_buffer, memory: vertex_buffer_memory };
-                        vert_buffer_component_vec.push(Some(vertex_buf));
-                    }, None => {
-                        vert_buffer_component_vec.push(None);
-                    }
+            let vertex_index = world.borrow_component::<VertexIndexComponent>().unwrap();
+            for vi in vertex_index.iter() {
+                if let Some(component) = vi {
+                    let (vertex_buffer, vertex_buffer_memory) = self.buffers.create_vertex_buffer(&self.context, &self.device, &component.vertices);
+                    let (index_buffer, index_buffer_memory) = self.buffers.create_index_buffer(&self.context, &self.device, &component.indices);
+                    let buffer_component = BufferComponent {
+                        vertex_buffer,
+                        vertex_buffer_memory,
+                        index_buffer,
+                        index_buffer_memory,
+                        indices: component.indices.clone(),
+                        push_const: create_push_constant_data_2d()
+                    };
+                    buffer_component_vec.push(Some(buffer_component));
+                }
+                else {
+                    buffer_component_vec.push(None);
                 }
             }
+        //    // Borrow the vertices that have been supplied to the world
+        //    let triangles = world.borrow_component::<TriangleComponent>().unwrap_or(return);
+        //    for triangle in triangles.iter().enumerate() {
+        //        match triangle.1 {
+        //            Some(triangle_component) => {
+        //                // TODO: Rename these variables
+        //                let (vertex_buffer, vertex_buffer_memory) = self.buffers.create_vertex_buffer(&self.context, &self.device, triangle_component);
+        //                //let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer_from_triangle(&self.context, &self.device, triangle_component);
+
+        //                let vertex_buf: VertexBuffer = VertexBuffer { buffer: vertex_buffer, memory: vertex_buffer_memory };
+        //                vert_buffer_component_vec.push(Some(vertex_buf));
+        //            }, None => {
+        //                vert_buffer_component_vec.push(None);
+        //            }
+        //        }
+        //    }
         }
-// x: 1395.4609375, y: 511.716552734375
-// x: 1395.74365234375, y: 1005.947509765625
-        world.insert_component(vert_buffer_component_vec);
+        world.insert_component(buffer_component_vec);
     }
     fn run(&mut self, world: &mut World) {
         // Copied from adel_renderer(_vulkano)
@@ -418,18 +435,11 @@ impl System for RendererAsh {
         //let projection_matrix = camera.get_projection();// * camera.get_view();
         //let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
         //let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
-        let vertex_option_buffers = world.borrow_component::<VertexBuffer>().unwrap();
-        let mut buffers_push_constant: Vec<(vk::Buffer, PushConstantData2D)> = Vec::new();
-        for i in vertex_option_buffers.iter().enumerate() {
-            if let Some(buffer) = i.1 {
-                    buffers_push_constant.push( (buffer.buffer.clone(),
-                        //create_push_constant_data(projection_matrix, transform)));
-                        create_push_constant_data_2d()));
-                //if let Some(transform) = &mut transform_ref[i.0] {
-                //    buffers_push_constant.push((buffer.buffer.clone(),
-                //        //create_push_constant_data(projection_matrix, transform)));
-                //        create_push_constant_data_proj(projection_matrix)));
-                //}
+        let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
+        let mut buffers_push_constant: Vec<&BufferComponent> = Vec::new();
+        for i in option_buffers.iter() {
+            if let Some(buffer) = i {
+                    buffers_push_constant.push(&buffer);
             }
         }
 
@@ -439,17 +449,18 @@ impl System for RendererAsh {
         unsafe {
             self.device.device_wait_idle().expect("ERROR: Failed to wait device idle on shutdown");
 
-            let mut vertex_buffers = world.borrow_component_mut::<VertexBuffer>().unwrap();
-
-            for i in vertex_buffers.iter_mut() {
-                match i {
-                    Some(buffer) => {
-                        self.device.destroy_buffer(buffer.buffer, None);
-                        self.device.free_memory(buffer.memory, None);
-                    }, None => {}
+            if let Some(mut buffers) = world.borrow_component_mut::<BufferComponent>() {
+                for i in buffers.iter_mut() {
+                    match i {
+                        Some(buffer) => {
+                            self.device.destroy_buffer(buffer.vertex_buffer, None);
+                            self.device.free_memory(buffer.vertex_buffer_memory, None);
+                            self.device.destroy_buffer(buffer.index_buffer, None);
+                            self.device.free_memory(buffer.index_buffer_memory, None);
+                        }, None => {}
+                    }
                 }
             }
-
         };
     }
     fn name(&self) -> &'static str { self.name }

@@ -17,9 +17,9 @@ fn main() {
 
     ];
     let triangle3 = vec![
-        Vertex2d { position: Vector2::new(0.2, -1.0), color: Vector3::new(0.0, 1.0, 0.0)},
-        Vertex2d { position: Vector2::new(0.7, 0.0), color: Vector3::new(0.0, 1.0, 0.0)},
-        Vertex2d { position: Vector2::new(0.2, 0.0), color: Vector3::new(0.0, 1.0, 0.0)},
+        Vertex2d { position: Vector2::new(0.0, -1.0), color: Vector3::new(1.0, 0.0, 0.0)},
+        Vertex2d { position: Vector2::new(0.5, -1.0), color: Vector3::new(1.0, 0.0, 0.0)},
+        Vertex2d { position: Vector2::new(0.5, 0.0), color: Vector3::new(1.0, 0.0, 0.0)},
 
     ];
 

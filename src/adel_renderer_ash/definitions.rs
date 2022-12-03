@@ -26,6 +26,21 @@ impl TriangleComponent {
     }
 }
 use ash::vk::{Buffer, DeviceMemory};
+// Bad name I know but this will go away soon
+pub struct VertexIndexComponent {
+    pub vertices : Vec<Vertex2d>,
+    pub indices : Vec<u16>
+}
+// TODO: Make a better struct to be passed around
+pub struct BufferComponent {
+    pub vertex_buffer: Buffer,
+    pub vertex_buffer_memory: DeviceMemory,
+    pub index_buffer: Buffer,
+    pub index_buffer_memory: DeviceMemory,
+    pub indices: Vec<u16>,
+    // Im just looking to compile and call it a day here
+    pub push_const: PushConstantData2D
+}
 // TODO: Create separate files for Vertex specific structs
 // TODO: Come up with a better name for this
 pub struct VertexBuffer {

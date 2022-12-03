@@ -174,39 +174,6 @@ impl AshBuffers {
         (buffer, buffer_memory)
     }
 
-    pub fn create_vertex_buffer(&self, context: &AshContext, device: &ash::Device, triangle :&TriangleComponent)
-        -> (vk::Buffer, vk::DeviceMemory) {
-        //let buffer_size = std::mem::size_of_val(&triangle.verticies) as vk::DeviceSize;
-        let buffer_size = (triangle.verticies.len() * std::mem::size_of::<Vertex2d>()) as vk::DeviceSize;
-        //log::info!("JAKOB buffer 1 {:?} buffer 2 {:?}", buffer_size, buffer_size2);
-        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
-            vk::BufferUsageFlags::TRANSFER_SRC, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT);
-
-        unsafe {
-            let data_ptr = device
-                .map_memory(
-                    staging_buffer_memory,
-                    0,
-                    buffer_size,
-                    vk::MemoryMapFlags::empty(),
-                )
-                .expect("Failed to Map Memory") as *mut Vertex2d;
-
-            data_ptr.copy_from_nonoverlapping(triangle.verticies.as_ptr(), triangle.verticies.len());
-
-            device.unmap_memory(staging_buffer_memory);
-        }
-        let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER, vk::MemoryPropertyFlags::DEVICE_LOCAL);
-        self.copy_buffer(device, &staging_buffer, &vertex_buffer, buffer_size);
-
-        unsafe {
-            device.destroy_buffer(staging_buffer, None);
-            device.free_memory(staging_buffer_memory, None);
-        }
-
-        (vertex_buffer, vertex_buffer_memory)
-    }
 
     fn copy_buffer(&self, device: &ash::Device, src_buffer: &vk::Buffer, dst_buffer: &vk::Buffer, size: vk::DeviceSize) {
         let alloc_info = vk::CommandBufferAllocateInfo::builder()
@@ -246,6 +213,72 @@ impl AshBuffers {
             device.queue_wait_idle(self.transient_queue).expect("Failed for device to wait idle");
             device.free_command_buffers(self.transient_command_pool, &command_buffers);
         }
+    }
+    pub fn create_vertex_buffer(&self, context: &AshContext, device: &ash::Device, vertices :&Vec<Vertex2d>)
+        -> (vk::Buffer, vk::DeviceMemory) {
+        //let buffer_size = std::mem::size_of_val(&triangle.verticies) as vk::DeviceSize;
+        let buffer_size = (vertices.len() * std::mem::size_of::<Vertex2d>()) as vk::DeviceSize;
+        //log::info!("JAKOB buffer 1 {:?} buffer 2 {:?}", buffer_size, buffer_size2);
+        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
+            vk::BufferUsageFlags::TRANSFER_SRC, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT);
+
+        unsafe {
+            let data_ptr = device
+                .map_memory(
+                    staging_buffer_memory,
+                    0,
+                    buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("Failed to Map Memory") as *mut Vertex2d;
+
+            data_ptr.copy_from_nonoverlapping(vertices.as_ptr(), vertices.len());
+
+            device.unmap_memory(staging_buffer_memory);
+        }
+        let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER, vk::MemoryPropertyFlags::DEVICE_LOCAL);
+        self.copy_buffer(device, &staging_buffer, &vertex_buffer, buffer_size);
+
+        unsafe {
+            device.destroy_buffer(staging_buffer, None);
+            device.free_memory(staging_buffer_memory, None);
+        }
+
+        (vertex_buffer, vertex_buffer_memory)
+    }
+
+
+    pub fn create_index_buffer(&self, context: &AshContext, device: &ash::Device, indicies: &Vec<u16>) -> (vk::Buffer, vk::DeviceMemory) {
+        let buffer_size = (indicies.len() * std::mem::size_of::<u16>()) as vk::DeviceSize;
+        //log::info!("JAKOB buffer 1 {:?} buffer 2 {:?}", buffer_size, buffer_size2);
+        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
+            vk::BufferUsageFlags::TRANSFER_SRC, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT);
+
+        unsafe {
+            let data_ptr = device
+                .map_memory(
+                    staging_buffer_memory,
+                    0,
+                    buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("Failed to Map Memory") as *mut u16;
+
+            data_ptr.copy_from_nonoverlapping(indicies.as_ptr(), indicies.len());
+
+            device.unmap_memory(staging_buffer_memory);
+        }
+        let (index_buffer, index_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER, vk::MemoryPropertyFlags::DEVICE_LOCAL);
+        self.copy_buffer(device, &staging_buffer, &index_buffer, buffer_size);
+
+        unsafe {
+            device.destroy_buffer(staging_buffer, None);
+            device.free_memory(staging_buffer_memory, None);
+        }
+
+        (index_buffer, index_buffer_memory)
     }
 }
 
