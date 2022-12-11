@@ -34,8 +34,6 @@ impl KeyboardHandler {
 
 impl System for KeyboardHandler {
     fn startup(&mut self, world: &mut World) {
-        // Tmp here while I test things
-        return;
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
         for i in input_ref.iter().enumerate() {
