@@ -22,10 +22,13 @@ use crate::adel_renderer_ash::utility::{
     sync::SyncObjects,
 };
 use super::definitions::{
+    BufferComponent,
     create_push_constant_data,
     PushConstantData,
+    PushConstantData2D,
     TransformComponent,
     TriangleComponent,
+    VertexIndexComponent,
     Vertex2d,
     VertexBuffer,
 };
@@ -100,7 +103,8 @@ impl RendererAsh {
 }
 
 impl RendererAsh {
-    pub fn draw_frame(&mut self, vertex_buffers: Vec<(vk::Buffer, PushConstantData)>) {
+    // Will be worth revisiting at a later time if splitting up draw_frame is desired
+    fn begin_frame(&mut self) -> ([vk::Fence; 1], u32, vk::CommandBuffer) {
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
 
@@ -110,6 +114,8 @@ impl RendererAsh {
                 .expect("Failed to wait for Fence!");
         }
 
+        // May need to find out where to put this
+        //assert_eq!(self.is_frame_started, false);
         // Acquire the next image in the swapchain
         let (image_index, _is_sub_optimal) = unsafe {
             let result = self.swapchain.swapchain_loader().acquire_next_image(
@@ -120,12 +126,14 @@ impl RendererAsh {
             );
             match result {
                 Ok(image_index) => image_index,
-                Err(vk_result) => match vk_result {
-                    vk::Result::ERROR_OUT_OF_DATE_KHR => {
-                        self.recreate_swapchain();
-                        return;
-                    }
-                    _ => panic!("Failed to acquire Swap Chain Image!"),
+                Err(vk_result) =>
+                    match vk_result {
+                        // TODO: If getting the image index fails crash the program
+                        //vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                        //    self.recreate_swapchain();
+                        //    return;
+                        //}
+                        _ => panic!("Failed to acquire Swap Chain Image!"),
                 },
             }
         };
@@ -140,7 +148,9 @@ impl RendererAsh {
                 begin_command_buffer(command_buffer, &begin_info)
                 .expect("ERROR: Failed to begin command buffer");
         }
-
+        (wait_fences, image_index, command_buffer)
+    }
+    fn begin_swapchain_render_pass(&mut self, image_index: u32, command_buffer: &vk::CommandBuffer) {
         // BeginSwapcahinRenderPass
         let clear_values = [
             vk::ClearValue {
@@ -182,57 +192,23 @@ impl RendererAsh {
         }];
         unsafe {
             self.device
-                .cmd_begin_render_pass(command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE);
+                .cmd_begin_render_pass(*command_buffer, &render_pass_begin_info, vk::SubpassContents::INLINE);
 
             self.device
-                .cmd_set_viewport(command_buffer, 0, &viewport);
+                .cmd_set_viewport(*command_buffer, 0, &viewport);
 
             self.device
-                .cmd_set_scissor(command_buffer, 0, &scissor);
+                .cmd_set_scissor(*command_buffer, 0, &scissor);
         }
-
-        // Render Objects
-        //bind pipeline
-        let device_size_offsets: [vk::DeviceSize; 1] = [0];
+    }
+    fn end_swapchain_render_pass(&mut self, command_buffer: &vk::CommandBuffer) {
         unsafe {
             self.device
-                .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
-            for buffer in vertex_buffers {
-                self.device
-                    .cmd_bind_vertex_buffers(command_buffer,
-                        0,
-                        &[buffer.0],
-                        &device_size_offsets
-                    );
-                self.device
-                    .cmd_push_constants(command_buffer,
-                        self.pipeline.pipeline_layout(),
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        0,
-                        as_bytes(&buffer.1)
-                    );
-                //self.device
-                //    .cmd_push_constants(command_buffer,
-                //        self.pipeline.pipeline_layout(),
-                //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                //        0,
-                //        as_bytes(&self.push_const)
-                //    );
-
-                // TODO: Vertex count shouldn't be hardcoded but lets get this bread
-                self.device
-                    .cmd_draw(command_buffer, 3, 1, 0, 0);
-
-            }
+                .cmd_end_render_pass(*command_buffer);
         }
-
-        // End SwapchainRenderPass
-
-        unsafe {
-            self.device
-                .cmd_end_render_pass(command_buffer);
-        }
-        // End frame
+    }
+    // No need for references here as the resources are consumed at the end of the frame, and new ones will be generated next frame
+    fn end_frame(&mut self, image_index: u32, wait_fences: [vk::Fence; 1], command_buffer: vk::CommandBuffer) {
         unsafe {
             self.device
                 .end_command_buffer(command_buffer)
@@ -292,6 +268,41 @@ impl RendererAsh {
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
+    // TODO: Break up this function
+    pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData2D)>) {
+        // Begin_frame requires a return of Image_index, wait_fences and command_buffer
+        let (wait_fences, image_index, command_buffer) = self.begin_frame();
+        self.begin_swapchain_render_pass(image_index, &command_buffer);
+
+        // Render Objects
+        //bind pipeline
+        let device_size_offsets: [vk::DeviceSize; 1] = [0];
+        unsafe {
+            self.device
+                .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
+            for buffer in buffers.iter() {
+                self.device
+                    .cmd_bind_vertex_buffers(command_buffer,
+                        0,
+                        &[buffer.0.vertex_buffer],
+                        &device_size_offsets
+                    );
+                self.device.cmd_bind_index_buffer(command_buffer, buffer.0.index_buffer, 0, vk::IndexType::UINT16);
+                self.device
+                    .cmd_push_constants(command_buffer,
+                        self.pipeline.pipeline_layout(),
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        0,
+                        as_bytes(&buffer.1)
+                    );
+                self.device.cmd_draw_indexed(command_buffer, buffer.0.indices_count, 1, 0, 0, 0);
+            }
+        }
+
+        self.end_swapchain_render_pass(&command_buffer);
+        self.end_frame(image_index, wait_fences, command_buffer);
+    }
+
     fn recreate_swapchain(&mut self) {
         unsafe {
             self.device
@@ -325,127 +336,81 @@ impl RendererAsh {
         }
     }
 
-    // Will be worth revisiting at a later time if splitting up draw_frame is desired
-    #[allow(dead_code)]
-    fn begin_frame(&mut self) -> vk::CommandBuffer {
-        assert_eq!(self.is_frame_started, false);
-        // Wait for the fences to clear prior to beginning the next render
-        let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
-
-        unsafe {
-            self.device
-                .wait_for_fences(&wait_fences, true, std::u64::MAX)
-                .expect("Failed to wait for Fence!");
-        }
-
-        // Acquire the next image in the swapchain
-        let (image_index, _is_sub_optimal) = unsafe {
-            let result = self.swapchain.swapchain_loader().acquire_next_image(
-                self.swapchain.swapchain(),
-                std::u64::MAX,
-                self.sync_objects.image_available_semaphores[self.current_frame],
-                vk::Fence::null(),
-            );
-            match result {
-                Ok(image_index) => image_index,
-                Err(vk_result) =>
-                    match vk_result {
-                        // TODO: If getting the image index fails crash the program
-                        //vk::Result::ERROR_OUT_OF_DATE_KHR => {
-                        //    self.recreate_swapchain();
-                        //    return;
-                        //}
-                        _ => panic!("Failed to acquire Swap Chain Image!"),
-                },
-            }
-        };
-        self.is_frame_started = true;
-        // Set isFrameStarted to true
-        // Get the command buffer from the vector that is equal to the current frame
-        let command_buffer = self.buffers.commandbuffers()[self.current_frame];
-        let begin_info = vk::CommandBufferBeginInfo::default();
-
-        unsafe {
-            self.device.
-                begin_command_buffer(command_buffer, &begin_info)
-                .expect("ERROR: Failed to begin command buffer");
-        }
-        command_buffer
-    }
 
 }
-use nalgebra::Matrix4;
+use nalgebra::{Matrix2, Matrix4};
 pub fn create_push_constant_data_proj(camera_projection : Matrix4<f32>) -> PushConstantData {
     PushConstantData {
-        transform: camera_projection,
+        transform: Matrix4::identity(), //camera_projection,
         color: Vector3::new(0.0, 0.0, 0.0),
     }
 }
+pub fn create_push_constant_data_2d() -> PushConstantData2D {
+    PushConstantData2D {
+        transform: Matrix2::identity(), //camera_projection,
+        color: Vector3::new(0.0, 1.0, 0.0),
+    }
+}
 
+use crate::adel_ecs::RunStage;
 impl System for RendererAsh {
     fn startup(&mut self, world: &mut World) {
-        let mut vert_buffer_component_vec: Vec<Option<VertexBuffer>> = Vec::new();
+        let mut buffer_component_vec: Vec<Option<BufferComponent>> = Vec::new();
 
         {
-            // Borrow the vertices that have been supplied to the world
-            let triangles = world.borrow_component::<TriangleComponent>().unwrap();
-            for triangle in triangles.iter().enumerate() {
-                match triangle.1 {
-                    Some(triangle_component) => {
-                        // TODO: Rename these variables
-                        let (vertex_buffer, vertex_buffer_memory) = buffers::create_vertex_buffer_from_triangle(&self.context, &self.device, triangle_component);
-                        let vertex_buf: VertexBuffer = VertexBuffer { buffer: vertex_buffer, memory: vertex_buffer_memory };
-                        vert_buffer_component_vec.push(Some(vertex_buf));
-                    }, None => {
-                        vert_buffer_component_vec.push(None);
-                    }
+            let vertex_index = world.borrow_component::<VertexIndexComponent>().unwrap();
+            for vi in vertex_index.iter() {
+                if let Some(component) = vi {
+                    let (vertex_buffer, vertex_buffer_memory) = self.buffers.create_vertex_buffer(&self.context, &self.device, &component.vertices);
+                    let (index_buffer, index_buffer_memory) = self.buffers.create_index_buffer(&self.context, &self.device, &component.indices);
+                    let buffer_component = BufferComponent {
+                        vertex_buffer,
+                        vertex_buffer_memory,
+                        index_buffer,
+                        index_buffer_memory,
+                        indices_count: component.indices.len() as u32,
+                    };
+                    buffer_component_vec.push(Some(buffer_component));
                 }
+                else {
+                    buffer_component_vec.push(None);
+                }
+            }
+        }
+        world.insert_component(buffer_component_vec);
+    }
+    fn run(&mut self, world: &mut World) {
+        let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
+        let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData2D)> = Vec::new();
+        for i in option_buffers.iter() {
+            if let Some(buffer) = i {
+                    buffers_push_constant.push((&buffer, create_push_constant_data_2d()));
             }
         }
 
-        world.insert_component(vert_buffer_component_vec);
-    }
-    fn run(&mut self, world: &mut World) {
-        // Copied from adel_renderer(_vulkano)
-        // Get the camera projection
-        // Apply the transformation matrix to it
-        // iterate through all the transforms and apply the camera translation
-        // draw frame
-        let camera = world.get_resource::<Camera>().unwrap();
-        let projection_matrix = camera.get_projection() * camera.get_view();
-        //let mut model_ref = world.borrow_component_mut::<ModelComponent>().unwrap();
-        let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
-        let vertex_option_buffers = world.borrow_component::<VertexBuffer>().unwrap();
-        let mut buffers_push_constant: Vec<(vk::Buffer, PushConstantData)> = Vec::new();
-        for i in vertex_option_buffers.iter().enumerate() {
-            if let Some(buffer) = i.1 {
-                if let Some(transform) = &mut transform_ref[i.0] {
-                    buffers_push_constant.push((buffer.buffer.clone(),
-                        //create_push_constant_data(projection_matrix, transform)));
-                        create_push_constant_data_proj(projection_matrix)));
-                }
-            }
-        }
         self.draw_frame(buffers_push_constant);
     }
     fn shutdown(&mut self, world: &mut World) {
         unsafe {
             self.device.device_wait_idle().expect("ERROR: Failed to wait device idle on shutdown");
 
-            let mut vertex_buffers = world.borrow_component_mut::<VertexBuffer>().unwrap();
-
-            for i in vertex_buffers.iter_mut() {
-                match i {
-                    Some(buffer) => {
-                        self.device.destroy_buffer(buffer.buffer, None);
-                        self.device.free_memory(buffer.memory, None);
-                    }, None => {}
+            if let Some(mut buffers) = world.borrow_component_mut::<BufferComponent>() {
+                for i in buffers.iter_mut() {
+                    if let Some(buffer) = i {
+                        self.device.destroy_buffer(buffer.vertex_buffer, None);
+                        self.device.free_memory(buffer.vertex_buffer_memory, None);
+                        self.device.destroy_buffer(buffer.index_buffer, None);
+                        self.device.free_memory(buffer.index_buffer_memory, None);
+                    }
                 }
             }
-
         };
     }
     fn name(&self) -> &'static str { self.name }
+
+    fn get_run_stage(&self) -> RunStage {
+        RunStage::Update
+    }
 }
 
 impl Drop for RendererAsh {
@@ -458,7 +423,7 @@ impl Drop for RendererAsh {
             // Framebuffers need to be separated as they are removed when recreating swapchain
             self.buffers.destroy_framebuffers(&self.device);
             self.buffers.free_command_buffers(&self.device);
-            self.buffers.destroy_command_pool(&self.device);
+            self.buffers.destroy_command_pools(&self.device);
 
             // Destorys Swapchain and ImageViews
             self.swapchain.destroy_swapchain(&self.device);

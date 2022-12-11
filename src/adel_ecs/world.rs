@@ -144,7 +144,7 @@ impl World {
     }
     pub fn get_resource_mut<R: 'static>(&self) -> Option<RefMut<R>> {
         let type_id = TypeId::of::<R>();
-        let box_resource = self.resources.get(&type_id).unwrap();
+        let box_resource = self.resources.get(&type_id).unwrap_or(return None);
         if let Some(resource) =  box_resource.resource_as().downcast_ref::<RefCell<R>>() {
             return Some(resource.borrow_mut());
         } else {
@@ -209,8 +209,4 @@ impl World {
         }
     }
     */
-}
-
-pub fn print_type_of<T>(_: &T) {
-    log::info!("T is of Type {:?}", std::any::type_name::<T>());
 }

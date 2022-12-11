@@ -1,7 +1,7 @@
 use crate::adel_ecs::World;
 //use crate::adel_renderer::{VulkanoRenderer};
 #[allow(unused_imports)]
-use crate::adel_ecs::System;
+use crate::adel_ecs::{RunStage, System};
 use crate::adel_winit::WinitWindow;
 use crate::adel_camera::Camera;
 use crate::adel_input::{ KeyboardHandler, InputConsumer };
@@ -46,11 +46,11 @@ impl Application {
         // The current lack of depth buffering effects whether it can be rendered
         //camera.set_view_yxz(Vector3::new(0.0, 0.0, 0.0),
         //        Vector3::new(0.0, 0.0, 0.0));
-        world.insert_resource::<InputConsumer>(input_consumer);
-        world.insert_resource::<Camera>(camera);
+        //world.insert_resource::<InputConsumer>(input_consumer);
+        //world.insert_resource::<Camera>(camera);
         //log::info!("What is the value {:?}", keyboard.pressed);
         let mut systems: Vec<Box<dyn System>> = Vec::new();
-        systems.push(Box::new(keyboard_handler));
+        //systems.push(Box::new(keyboard_handler));
         systems.push(Box::new(renderer_ash));
         Self {
             world,
@@ -78,6 +78,11 @@ impl Application {
                     ..
                 } => match event {
                     WindowEvent::Resized(_)  => {
+                        //for i in &mut self.systems {
+                        //    if i.name().eq("Renderer") {
+
+                        //    }
+                        //}
                     //    Need to send a message into the Renderer Class that a resize has occured
                     },
                     // Leave the close requested event here for now
@@ -92,6 +97,7 @@ impl Application {
                         if input.virtual_keycode.unwrap() == VirtualKeyCode::Escape {
                             *control_flow = ControlFlow::Exit;
                         }
+
                     },
                     _ => {
                         // Need to pass the pressed variable into a keyboard class
@@ -107,26 +113,34 @@ impl Application {
                     // TODO: Properly store deltaTime in world
                     //println!("FrameTime {}", frame_time);
                     self.world.update_dt(frame_time);
-                    //self.world.update_dt(0.05);
 
                     current_time = new_time;
-
-                    // All events have been processed so it's time to draw,
-                    // TODO: Make generic App.update, fix gametick
+                    // TODO: This works, for now, with a small number of systems, iterating through them 3 times per update isn't
+                    // terrible (right now) just not ideal, perhaps it'd be worth storing systems in different buckets?
+                    // What can I do with a HashMap<Key, Vec<Systems>>??? something to think about
                     for i in &mut self.systems {
-                        i.as_mut().run(&mut self.world);
+                        if i.get_run_stage() == RunStage::EarlyUpdate {
+                            i.as_mut().run(&mut self.world);
+                        }
                     }
-                    // Currently all the systems are ran in order
-                    //
                     // Perhaps request redraw here
                     //renderer_ash.window_ref().unwrap().request_redraw();
 
                 } Event::RedrawRequested(_window_id) => {
                     // Redraw frame
+                    for i in &mut self.systems {
+                        if i.get_run_stage() == RunStage::Update {
+                            i.as_mut().run(&mut self.world);
+                        }
+                    }
 
                 },
                 Event::RedrawEventsCleared => {
-
+                    for i in &mut self.systems {
+                        if i.get_run_stage() == RunStage::LateUpdate {
+                            i.as_mut().run(&mut self.world);
+                        }
+                    }
                 },
                 Event::LoopDestroyed => {
                     for i in &mut self.systems {

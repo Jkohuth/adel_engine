@@ -26,6 +26,19 @@ impl TriangleComponent {
     }
 }
 use ash::vk::{Buffer, DeviceMemory};
+// Bad name I know but this will go away soon
+pub struct VertexIndexComponent {
+    pub vertices : Vec<Vertex2d>,
+    pub indices : Vec<u16>
+}
+// TODO: Make a better struct to be passed around
+pub struct BufferComponent {
+    pub vertex_buffer: Buffer,
+    pub vertex_buffer_memory: DeviceMemory,
+    pub index_buffer: Buffer,
+    pub index_buffer_memory: DeviceMemory,
+    pub indices_count: u32,
+}
 // TODO: Create separate files for Vertex specific structs
 // TODO: Come up with a better name for this
 pub struct VertexBuffer {
@@ -36,6 +49,12 @@ pub struct VertexBuffer {
 #[derive(Debug)]
 pub struct PushConstantData {
     pub transform: nalgebra::Matrix4<f32>,
+    pub color: nalgebra::Vector3<f32>
+}
+#[repr(C)]
+#[derive(Debug)]
+pub struct PushConstantData2D {
+    pub transform: nalgebra::Matrix2<f32>,
     pub color: nalgebra::Vector3<f32>
 }
 #[derive(Debug)]

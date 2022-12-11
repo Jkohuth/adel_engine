@@ -42,8 +42,8 @@ impl System for KeyboardHandler {
                 if let Some(camera_transform) = &mut transform_ref[i.0] {
                     //log::info!("Post move camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
                     let mut camera = world.get_resource_mut::<Camera>().unwrap();
-                    camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
-                    //camera.set_orthographic_projection(-1.0, 1.0, 1.0, -1.0, -1.0, 10.0);
+                    //camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
+                    camera.set_orthographic_projection(-1.0, 1.0, 1.0, -1.0, -1.0, 10.0);
                 }
             }
         }

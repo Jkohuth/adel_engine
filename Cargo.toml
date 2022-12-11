@@ -41,6 +41,10 @@ path = "bin/cube.rs"
 name = "ash"
 path = "bin/ash.rs"
 
+[[bin]]
+name = "index_buffer"
+path = "bin/index_buffer.rs"
+
 [[bench]]
 name = "vulkano_bench"
 path = "benches/vulkano_bench.rs"
