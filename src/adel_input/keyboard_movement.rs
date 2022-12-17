@@ -26,7 +26,7 @@ pub struct KeyboardHandler {
 impl KeyboardHandler {
     pub fn new() -> Self {
         Self {
-            name: "KeyboardComponent",
+            name: "KeyboardHandler",
         }
     }
 

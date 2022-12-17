@@ -36,6 +36,8 @@ use crate::adel_camera::Camera;
 use crate::adel_tools::*;
 
 use crate::adel_winit::WinitWindow;
+use winit::window::Window;
+use std::rc::{Rc};
 const NAME: &'static str = "Renderer";
 
 // May have to invert the order here, as the values of structs are dropped in the order they are declared
@@ -57,7 +59,7 @@ pub struct RendererAsh {
     is_framebuffer_resized: bool,
 
     push_const: PushConstantData,
-    pub window: WinitWindow,
+    pub window: Rc<Window>,
 
     name: &'static str,
 
@@ -65,12 +67,12 @@ pub struct RendererAsh {
 }
 
 impl RendererAsh {
-    pub fn new(window: WinitWindow) -> Self {
+    pub fn new(window: Rc<Window>) -> Self {
         // init vulkan stuff
         let entry = unsafe { ash::Entry::load().expect("Error: Failed to create Ash Entry") };
-        let context = AshContext::new(&entry, window.window_ref().unwrap());
+        let context = AshContext::new(&entry, &window);
         let device = create_logical_device(&context, &VALIDATION_LAYERS.to_vec());
-        let swapchain = AshSwapchain::new(&context, &device, window.window_ref().unwrap());
+        let swapchain = AshSwapchain::new(&context, &device, &window);
         let pipeline = AshPipeline::new(&device, swapchain.format(), swapchain.extent());
         let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline);
 
@@ -99,10 +101,6 @@ impl RendererAsh {
         }
 
     }
-
-}
-
-impl RendererAsh {
     // Will be worth revisiting at a later time if splitting up draw_frame is desired
     fn begin_frame(&mut self) -> ([vk::Fence; 1], u32, vk::CommandBuffer) {
         // Wait for the fences to clear prior to beginning the next render
@@ -310,12 +308,12 @@ impl RendererAsh {
                 .expect("Failed to wait device idle!")
         };
         self.destroy_swapchain_resources();
-        let width_height = self.window.window_width_height();
+        let width_height = (self.window.inner_size().width, self.window.inner_size().height);
         self.context.surface_info.update_screen_width_height(width_height.0, width_height.1);
         self.swapchain.recreate_swapchain(
             &self.context,
             &self.device,
-            self.window.window_ref().unwrap(),
+            &self.window,
         );
 
         self.pipeline.recreate_render_pass(&self.device, self.swapchain.swapchain_info.swapchain_format);
@@ -408,8 +406,9 @@ impl System for RendererAsh {
     }
     fn name(&self) -> &'static str { self.name }
 
+    // Update doesn't recreate swapchain
     fn get_run_stage(&self) -> RunStage {
-        RunStage::Update
+        RunStage::RedrawUpdate
     }
 }
 

@@ -19,11 +19,14 @@ use winit::{
         WindowEvent,
     },
     event_loop::{ControlFlow, EventLoop },
+    window::Window,
 };
+use std::rc::Rc;
 
 pub struct Application {
     pub world: World,
     pub systems: Vec<Box<dyn System>>,
+    pub window: Rc<Window>,
     event_loop: EventLoop<()>,
 }
 
@@ -33,7 +36,8 @@ impl Application {
     pub fn new(mut world: World) -> Self {
         let mut winit_window = WinitWindow::new();
         let event_loop: EventLoop<()> = winit_window.event_loop().unwrap();
-        let renderer_ash = RendererAsh::new(winit_window);
+        let renderer_ash = RendererAsh::new(winit_window.rc_clone_window());
+        let app_window_ref = winit_window.rc_clone_window();
         //let renderer = VulkanoRenderer::new(winit_window.window().unwrap());
         // Create the input Consumer and keyboard handler
         let keyboard_handler = KeyboardHandler::new();
@@ -52,9 +56,11 @@ impl Application {
         let mut systems: Vec<Box<dyn System>> = Vec::new();
         //systems.push(Box::new(keyboard_handler));
         systems.push(Box::new(renderer_ash));
+        systems.push(Box::new(winit_window));
         Self {
             world,
             systems,
+            window: app_window_ref,
             event_loop,
         }
     }
@@ -123,13 +129,14 @@ impl Application {
                             i.as_mut().run(&mut self.world);
                         }
                     }
+                    self.window.as_ref().request_redraw();
                     // Perhaps request redraw here
                     //renderer_ash.window_ref().unwrap().request_redraw();
 
                 } Event::RedrawRequested(_window_id) => {
                     // Redraw frame
                     for i in &mut self.systems {
-                        if i.get_run_stage() == RunStage::Update {
+                        if i.get_run_stage() == RunStage::RedrawUpdate {
                             i.as_mut().run(&mut self.world);
                         }
                     }
