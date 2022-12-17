@@ -5,14 +5,16 @@ use winit::{
         WindowBuilder,
     },
 };
-
+use crate::adel_ecs::{System, World};
+use std::rc::Rc;
 const WINDOW_TITLE: &'static str = "Adel Engine";
 const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 
 pub struct WinitWindow {
-    window: Option<Window>,
+    window: Rc<Window>,
     event_loop: Option<EventLoop<()>>,
+    name: &'static str
 }
 // TODO: Switching to ash means most of this window setup class can be rewritten
 impl WinitWindow {
@@ -25,21 +27,27 @@ impl WinitWindow {
                 WINDOW_HEIGHT as f32,
             )).build(&event_loop).unwrap();
         Self {
-            window: Some(window),
+            window: Rc::new(window),
             event_loop: Some(event_loop),
+            name: "WindowSystem"
         }
     }
     pub fn window_width_height(&self) -> (u32, u32) {
-        (self.window.as_ref().unwrap().inner_size().width, self.window.as_ref().unwrap().inner_size().height)
+        (self.window.as_ref().inner_size().width, self.window.as_ref().inner_size().height)
     }
-    pub fn window_ref(&self) -> Option<&Window> {
-        self.window.as_ref()
+    pub fn rc_clone_window(&self) -> Rc<Window> {
+        Rc::clone(&self.window)
     }
-    pub fn window(&mut self) -> Option<Window> {
-        self.window.take()
-    }
-
     pub fn event_loop(&mut self) -> Option<EventLoop<()>> {
         self.event_loop.take()
+    }
+}
+
+impl System for WinitWindow {
+    fn startup(&mut self, world: &mut World) {}
+    fn run(&mut self, world: &mut World) {}
+    fn shutdown(&mut self, world: &mut World) {}
+    fn name(&self) -> &'static str {
+        self.name
     }
 }

@@ -4,6 +4,7 @@ use crate::adel_ecs::world::World;
 pub enum RunStage {
     EarlyUpdate,
     Update,
+    RedrawUpdate,
     LateUpdate
 }
 
