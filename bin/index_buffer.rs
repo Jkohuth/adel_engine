@@ -3,6 +3,7 @@ use adel::app::Application;
 use adel::ecs::World;
 use adel::renderer_ash::definitions::{VertexIndexComponent, Vertex2d};
 use nalgebra::{Vector2, Vector3};
+use adel::renderer_ash::definitions::Transform2dComponent;
 
 fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
@@ -20,8 +21,10 @@ fn main() {
         vertices,
         indices
     };
+    let transform2d = Transform2dComponent::default();
     let entity = world.new_entity();
     world.add_component_to_entity(entity, vi_component);
+    world.add_component_to_entity(entity, transform2d);
     let app = Application::new(world);
     app.main_loop();
 }

@@ -275,7 +275,7 @@ impl AshPipeline {
                 )
                 .expect("Failed to create Graphics Pipeline!.")
         };
-
+        log::info!("Created Graphics pipeline");
         unsafe {
             device.destroy_shader_module(vert_shader, None);
             device.destroy_shader_module(frag_shader, None);

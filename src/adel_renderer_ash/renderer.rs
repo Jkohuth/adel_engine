@@ -337,13 +337,14 @@ impl RendererAsh {
 
 }
 use nalgebra::{Matrix2, Matrix4};
+use crate::adel_renderer_ash::Transform2dComponent;
 pub fn create_push_constant_data_proj(camera_projection : Matrix4<f32>) -> PushConstantData {
     PushConstantData {
         transform: Matrix4::identity(), //camera_projection,
         color: Vector3::new(0.0, 0.0, 0.0),
     }
 }
-pub fn create_push_constant_data_2d() -> PushConstantData2D {
+pub fn create_push_constant_data_2d(transform: &Transform2dComponent) -> PushConstantData2D {
     PushConstantData2D {
         transform: Matrix2::identity(), //camera_projection,
         color: Vector3::new(0.0, 1.0, 0.0),
@@ -379,10 +380,14 @@ impl System for RendererAsh {
     }
     fn run(&mut self, world: &mut World) {
         let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
+        let transform2d_component = world.borrow_component::<Transform2dComponent>().unwrap();
         let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData2D)> = Vec::new();
-        for i in option_buffers.iter() {
-            if let Some(buffer) = i {
-                    buffers_push_constant.push((&buffer, create_push_constant_data_2d()));
+        for i in option_buffers.iter().enumerate() {
+            if let Some(buffer) = i.1 {
+                if let Some(transform) = &transform2d_component[i.0] {
+                    buffers_push_constant.push((&buffer, create_push_constant_data_2d(transform)));
+
+                }
             }
         }
 

@@ -1,5 +1,6 @@
 use nalgebra::{
     Matrix2,
+    Matrix3,
     Matrix4,
     Rotation3,
     RowVector4,
@@ -171,6 +172,29 @@ impl Transform2dComponent {
         let rot_mat = Matrix2::<f32>::new(cos, sin, -sin, cos);
         let scale_mat = Matrix2::<f32>::new(self.scale.x, 0.0, 0.0, self.scale.y);*/
         rot_mat * scale_mat
+    }
+    // Using Homogenous Coordinates in 2D, can be done with a standard transform and probably
+    // should to include a Z buffer, keeping things like this to better understand
+    pub fn mat3(&self) -> Matrix3<f32> {
+        let sin: f32 = self.rotation.sin();
+        let cos: f32 = self.rotation.cos();
+        // This may be wrong, I haven't used 2D rendering with nalgebra
+        let rot_mat = Matrix3::from_columns(&[
+            Vector3::new(cos, -sin, 0.0), // 00 10 20
+            Vector3::new(sin, cos, 0.0),  // 10 11 21
+            Vector3::new(0.0, 0.0, 1.0) // 20 21 22
+        ]);
+        let scale_mat = Matrix3::from_columns(&[
+            Vector3::new(self.scale.x, 0.0, 0.0),
+            Vector3::new(0.0, self.scale.y, 0.0),
+            Vector3::new(0.0, 0.0, 1.0)
+        ]);
+        let mut rot_scale_translate = rot_mat * scale_mat;
+
+        rot_scale_translate[(2,0)] = self.translation[0];
+        rot_scale_translate[(2,1)] = self.translation[1];
+        //log::info!("Mat3: {:?}", rot_scale_translate);
+        rot_scale_translate
     }
 }
 impl Default for Transform2dComponent {

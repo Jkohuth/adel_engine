@@ -125,13 +125,10 @@ impl Application {
                     // terrible (right now) just not ideal, perhaps it'd be worth storing systems in different buckets?
                     // What can I do with a HashMap<Key, Vec<Systems>>??? something to think about
                     for i in &mut self.systems {
-                        if i.get_run_stage() == RunStage::EarlyUpdate {
+                        if i.get_run_stage() == RunStage::Update {
                             i.as_mut().run(&mut self.world);
                         }
                     }
-                    self.window.as_ref().request_redraw();
-                    // Perhaps request redraw here
-                    //renderer_ash.window_ref().unwrap().request_redraw();
 
                 } Event::RedrawRequested(_window_id) => {
                     // Redraw frame
