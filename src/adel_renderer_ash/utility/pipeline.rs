@@ -2,7 +2,7 @@ use ash::vk;
 use std::ffi::CString;
 use inline_spirv::include_spirv;
 use crate::offset_of;
-use crate::adel_renderer_ash::definitions::{PushConstantData, PushConstantData2D, Vertex2d};
+use crate::adel_renderer_ash::definitions::{PushConstantData, PushConstantData2D, Vertex, Vertex2d};
 
 pub struct AshPipeline {
     render_pass: vk::RenderPass,
@@ -93,10 +93,10 @@ impl AshPipeline {
         // Create Shader Modules
         //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/triangle.vert", vert, glsl, entry="main");
         //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/triangle.frag", frag, glsl, entry="main");
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.frag", frag, glsl, entry="main");
-        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.vert", vert, glsl, entry="main");
-        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.frag", frag, glsl, entry="main");
+        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.vert", vert, glsl, entry="main");
+        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.frag", frag, glsl, entry="main");
+        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.vert", vert, glsl, entry="main");
+        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.frag", frag, glsl, entry="main");
         let vert_shader = AshPipeline::create_shader_module(&device, vert_spv);
         let frag_shader = AshPipeline::create_shader_module(&device, frag_spv);
 
@@ -116,7 +116,7 @@ impl AshPipeline {
         ];
         let vertex_input_binding_descriptions = [vk::VertexInputBindingDescription::builder()
             .binding(0)
-            .stride(std::mem::size_of::<Vertex2d>() as u32)
+            .stride(std::mem::size_of::<Vertex>() as u32)
             .input_rate(vk::VertexInputRate::VERTEX)
             .build()
         ];
@@ -124,14 +124,14 @@ impl AshPipeline {
                 vk::VertexInputAttributeDescription::builder()
                     .binding(0)
                     .location(0)
-                    .format(vk::Format::R32G32_SFLOAT)
-                    .offset(offset_of!(Vertex2d, position) as u32)
+                    .format(vk::Format::R32G32B32_SFLOAT)
+                    .offset(offset_of!(Vertex, position) as u32)
                     .build(),
                 vk::VertexInputAttributeDescription::builder()
                     .binding(0)
                     .location(1)
                     .format(vk::Format::R32G32B32_SFLOAT)
-                    .offset(offset_of!(Vertex2d, color) as u32)
+                    .offset(offset_of!(Vertex, color) as u32)
                     .build()
                 ];
         let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::builder()
@@ -235,7 +235,7 @@ impl AshPipeline {
         let push_constant_range = [vk::PushConstantRange::builder()
             .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
             .offset(0)
-            .size(std::mem::size_of::<PushConstantData2D>() as u32)
+            .size(std::mem::size_of::<PushConstantData>() as u32)
             .build()];
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
             .push_constant_ranges(&push_constant_range)

@@ -1,5 +1,6 @@
 use std::cell::{Ref, RefCell, RefMut };
 use std::any::TypeId;
+use crate::adel_tools::print_type_of;
 
 #[allow(unused_imports)]
 use std::collections::HashMap;
@@ -144,7 +145,13 @@ impl World {
     }
     pub fn get_resource_mut<R: 'static>(&self) -> Option<RefMut<R>> {
         let type_id = TypeId::of::<R>();
-        let box_resource = self.resources.get(&type_id).unwrap_or(return None);
+        let box_resource = match self.resources.get(&type_id){
+            Some(box_resource) => box_resource,
+            None => {
+                log::info!("ERROR: No resource found {:?}", print_type_of(&type_id));
+                return None;
+            }
+        };
         if let Some(resource) =  box_resource.resource_as().downcast_ref::<RefCell<R>>() {
             return Some(resource.borrow_mut());
         } else {

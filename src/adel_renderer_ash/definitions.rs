@@ -15,6 +15,12 @@ pub struct Vertex2d {
     pub position: nalgebra::Vector2::<f32>,
     pub color: nalgebra::Vector3::<f32>,
 }
+#[derive(Debug)]
+#[repr(C)]
+pub struct Vertex {
+    pub position: nalgebra::Vector3::<f32>,
+    pub color: nalgebra::Vector3::<f32>
+}
 pub struct TriangleComponent {
     pub verticies: Vec<Vertex2d>
 }
@@ -29,6 +35,10 @@ impl TriangleComponent {
 use ash::vk::{Buffer, DeviceMemory};
 // Bad name I know but this will go away soon
 pub struct VertexIndexComponent {
+    pub vertices : Vec<Vertex>,
+    pub indices : Vec<u16>
+}
+pub struct Vertex2dIndexComponent {
     pub vertices : Vec<Vertex2d>,
     pub indices : Vec<u16>
 }
@@ -55,7 +65,7 @@ pub struct PushConstantData {
 #[repr(C)]
 #[derive(Debug)]
 pub struct PushConstantData2D {
-    pub transform: nalgebra::Matrix2<f32>,
+    pub transform: nalgebra::Matrix3<f32>,
     pub color: nalgebra::Vector3<f32>
 }
 #[derive(Debug)]

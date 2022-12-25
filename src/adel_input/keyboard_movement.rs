@@ -9,11 +9,11 @@ use crate::adel_ecs::{System, World};
 //use crate::adel_renderer::TransformComponent;
 
 use crate::adel_camera::Camera;
-use crate::adel_renderer_ash::definitions::TransformComponent;
+use crate::adel_renderer_ash::definitions::{TransformComponent, Transform2dComponent};
 // This class will be a struct that contains the current input variables
 // Which keys and which state shall be contained in this class
 // Other Classes need to reference this class in order to update accordingly
-// Starting point ESC to close window and exit game
+// Starting point ECS to close window and exit game
 
 // This Component is attached to entities who can react to keyboard inputs
 // Initially this will be used for a single controlled object
@@ -34,6 +34,7 @@ impl KeyboardHandler {
 
 impl System for KeyboardHandler {
     fn startup(&mut self, world: &mut World) {
+        /* Used for Cameras, may add it in later
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
         for i in input_ref.iter().enumerate() {
@@ -46,30 +47,33 @@ impl System for KeyboardHandler {
                     camera.set_orthographic_projection(-1.0, 1.0, 1.0, -1.0, -1.0, 10.0);
                 }
             }
-        }
+        } */
     }
 
     fn run(&mut self, world: &mut World) {
         let input_consumer = world.get_resource::<InputConsumer>().unwrap();
-
         // No input, don't spend anymore time here
         if input_consumer.pressed.is_empty() {
             return;
         }
 
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
-        let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
+        let mut transform_ref = world.borrow_component_mut::<Transform2dComponent>().unwrap();
 
         for i in input_ref.iter().enumerate() {
             // _input_entity is used to track that this entity at this position in the Component Array exists
             if let Some(_input_entity) = i.1 {
-                if let Some(camera_transform) = &mut transform_ref[i.0] {
+                if let Some(transform) = &mut transform_ref[i.0] {
+
+                    move_2d_object(&input_consumer.pressed, world.get_dt(), transform);
+                    log::info!("Input consumed Tranform {:?}", &transform);
+                    /* Camera Code will be back eventually -JAKOB 12-2022
                     //log::info!("Inside the move script camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
                     move_in_plane_xz(&input_consumer.pressed, world.get_dt(), camera_transform);
                     //log::info!("Post move camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
                     let mut camera = world.get_resource_mut::<Camera>().unwrap();
                     camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
-
+                    */
                 }
             }
         }
@@ -84,7 +88,27 @@ impl System for KeyboardHandler {
 static LOOK_SPEED: f32 = 1.5;
 static MOVE_SPEED: f32 = 3.0;
 
-use nalgebra::Vector3;
+use nalgebra::{Vector2, Vector3};
+fn move_2d_object(keys: &HashSet<VirtualKeyCode>, dt: f32, transform: &mut Transform2dComponent) {
+    let mut move_dir = Vector2::default();
+    if keys.contains(&VirtualKeyCode::D) {
+        move_dir.x += 1.0;
+    }
+    if keys.contains(&VirtualKeyCode::A) {
+        move_dir.x -= 1.0;
+    }
+    if keys.contains(&VirtualKeyCode::W) {
+        move_dir.y += 1.0;
+    }
+    if keys.contains(&VirtualKeyCode::S) {
+        move_dir.y -= 1.0;
+    }
+
+    if Vector2::dot(&move_dir, &move_dir) > f32::EPSILON {
+        transform.translation += MOVE_SPEED * dt * move_dir.normalize();
+    }
+}
+
 fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &mut TransformComponent) {
 
     let mut rotate = Vector3::new(0.0, 0.0, 0.0);

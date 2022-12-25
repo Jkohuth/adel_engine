@@ -45,6 +45,10 @@ path = "bin/ash.rs"
 name = "index_buffer"
 path = "bin/index_buffer.rs"
 
+[[bin]]
+name = "movement"
+path = "bin/movement.rs"
+
 [[bench]]
 name = "vulkano_bench"
 path = "benches/vulkano_bench.rs"

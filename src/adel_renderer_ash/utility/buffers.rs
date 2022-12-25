@@ -5,7 +5,7 @@ use super::{
     swapchain::AshSwapchain,
     context::AshContext,
 };
-use crate::adel_renderer_ash::definitions::{TriangleComponent, Vertex2d};
+use crate::adel_renderer_ash::definitions::{TriangleComponent, Vertex, Vertex2d};
 use super::structures;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
 pub struct AshBuffers {
@@ -214,7 +214,40 @@ impl AshBuffers {
             device.free_command_buffers(self.transient_command_pool, &command_buffers);
         }
     }
-    pub fn create_vertex_buffer(&self, context: &AshContext, device: &ash::Device, vertices :&Vec<Vertex2d>)
+    pub fn create_vertex_buffer(&self, context: &AshContext, device: &ash::Device, vertices :&Vec<Vertex>)
+        -> (vk::Buffer, vk::DeviceMemory) {
+        //let buffer_size = std::mem::size_of_val(&triangle.verticies) as vk::DeviceSize;
+        let buffer_size = (vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;
+        //log::info!("JAKOB buffer 1 {:?} buffer 2 {:?}", buffer_size, buffer_size2);
+        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
+            vk::BufferUsageFlags::TRANSFER_SRC, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT);
+
+        unsafe {
+            let data_ptr = device
+                .map_memory(
+                    staging_buffer_memory,
+                    0,
+                    buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("Failed to Map Memory") as *mut Vertex;
+
+            data_ptr.copy_from_nonoverlapping(vertices.as_ptr(), vertices.len());
+
+            device.unmap_memory(staging_buffer_memory);
+        }
+        let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER, vk::MemoryPropertyFlags::DEVICE_LOCAL);
+        self.copy_buffer(device, &staging_buffer, &vertex_buffer, buffer_size);
+
+        unsafe {
+            device.destroy_buffer(staging_buffer, None);
+            device.free_memory(staging_buffer_memory, None);
+        }
+
+        (vertex_buffer, vertex_buffer_memory)
+    }
+    pub fn create_vertex_buffer2d(&self, context: &AshContext, device: &ash::Device, vertices :&Vec<Vertex2d>)
         -> (vk::Buffer, vk::DeviceMemory) {
         //let buffer_size = std::mem::size_of_val(&triangle.verticies) as vk::DeviceSize;
         let buffer_size = (vertices.len() * std::mem::size_of::<Vertex2d>()) as vk::DeviceSize;
@@ -247,6 +280,7 @@ impl AshBuffers {
 
         (vertex_buffer, vertex_buffer_memory)
     }
+
 
 
     pub fn create_index_buffer(&self, context: &AshContext, device: &ash::Device, indicies: &Vec<u16>) -> (vk::Buffer, vk::DeviceMemory) {
