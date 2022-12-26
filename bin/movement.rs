@@ -32,13 +32,18 @@ fn main() {
         indices
     };
     let transform = TransformComponent::default();
+    let camera_transform = TransformComponent::default();
+
     log::info!("Transform default {:?}", &transform);
     log::info!("Nalgebra matrix order identity \n{:?}", Matrix4::<f32>::identity());
     let keyboard = KeyboardComponent {};
     let entity = world.new_entity();
-    world.add_component_to_entity(entity, vi_component2);
+    world.add_component_to_entity(entity, vi_component);
     world.add_component_to_entity(entity, transform);
+    let camera_entity = world.new_entity();
     world.add_component_to_entity(entity, keyboard);
+    //world.add_component_to_entity(camera_entity, keyboard);
+    world.add_component_to_entity(camera_entity, camera_transform);
     let app = Application::new(world);
     app.main_loop();
 }

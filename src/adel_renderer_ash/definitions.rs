@@ -100,26 +100,26 @@ impl TransformComponent {
         let s2 = self.rotation.x.sin();
         let c1 = self.rotation.y.cos();
         let s1 = self.rotation.y.sin();
-        Matrix4::from_rows(&[
-            RowVector4::<f32>::new(
+        Matrix4::from_columns(&[
+            Vector4::<f32>::new(
                 self.scale.x * (c1 * c3 + s1 * s2 * s3), // 00
-                self.scale.x * (c2 * s3),                // 01
-                self.scale.x * (c1 * s2 * s3 - c3 * s1), // 02
-                0.0),                                    // 03
-            RowVector4::<f32>::new(
-                self.scale.y * (c3 * s1 * s2 - c1 * s3), // 10
+                self.scale.x * (c2 * s3),                // 10
+                self.scale.x * (c1 * s2 * s3 - c3 * s1), // 20
+                0.0),                                    // 30
+            Vector4::<f32>::new(
+                self.scale.y * (c3 * s1 * s2 - c1 * s3), // 01
                 self.scale.y * (c2 * c3),                // 11
-                self.scale.y * (c1 * c3 * s2 + s1 * s3), // 12
-                0.0),                                    // 13
-            RowVector4::<f32>::new(
-                self.scale.z * (c2 * s1),                // 20
-                self.scale.z * (-s2),                    // 21
+                self.scale.y * (c1 * c3 * s2 + s1 * s3), // 21
+                0.0),                                    // 31
+            Vector4::<f32>::new(
+                self.scale.z * (c2 * s1),                // 02
+                self.scale.z * (-s2),                    // 12
                 self.scale.z * (c1 * c2),                // 22
-                0.0),                                    // 23
-            RowVector4::<f32>::new(
-                self.translation.x,                      // 30
-                self.translation.y,                      // 31
-                self.translation.z,                      // 32
+                0.0),                                    // 32
+            Vector4::<f32>::new(
+                self.translation.x,                      // 03
+                self.translation.y,                      // 13
+                self.translation.z,                      // 23
                 1.0)                                     // 33
             ])
     }

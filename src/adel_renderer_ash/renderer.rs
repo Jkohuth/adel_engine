@@ -382,14 +382,12 @@ impl System for RendererAsh {
     fn run(&mut self, world: &mut World) {
         let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
         let transform_component = world.borrow_component::<TransformComponent>().unwrap();
+        let camera = world.get_resource::<Camera>().unwrap();
         let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData)> = Vec::new();
         for i in option_buffers.iter().enumerate() {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &transform_component[i.0] {
-
-                    buffers_push_constant.push((&buffer, create_push_constant_data_tmp(Matrix4::<f32>::identity())));
-                    //buffers_push_constant.push((&buffer, create_push_constant_data_tmp(transform.mat4_less_computation())));
-
+                    buffers_push_constant.push((&buffer, create_push_constant_data(camera.get_projection(), &transform)));
                 }
             }
         }

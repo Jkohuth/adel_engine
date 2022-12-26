@@ -43,6 +43,9 @@ impl Application {
         let keyboard_handler = KeyboardHandler::new();
         let input_consumer = InputConsumer { pressed: HashSet::new() };
         let mut camera = Camera::new();
+        //camera.set_orthographic_projection(-1.0, 1.0, -1.0, 1.0, 0.0, 10.0);
+        //log::info!("Camera Info Position: {:?}\nProjection: {:?}", camera.position, camera.get_projection());
+        camera.set_orthographic_projection_pos(1.0, 1.0, 10.0);
         // TODO: Set up Fovy with radian angle
         //camera.set_perspective_projection((50.0f32).to_radians(), renderer.vulkano_window().aspect_ratio(), 0.1, 10.0);
         //camera.set_view_direction(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.1, 0.0, 1.0), None);
@@ -51,7 +54,7 @@ impl Application {
         //camera.set_view_yxz(Vector3::new(0.0, 0.0, 0.0),
         //        Vector3::new(0.0, 0.0, 0.0));
         world.insert_resource::<InputConsumer>(input_consumer);
-        //world.insert_resource::<Camera>(camera);
+        world.insert_resource::<Camera>(camera);
         //log::info!("What is the value {:?}", keyboard.pressed);
         let mut systems: Vec<Box<dyn System>> = Vec::new();
         systems.push(Box::new(keyboard_handler));
@@ -101,7 +104,6 @@ impl Application {
                             *control_flow = ControlFlow::Exit;
                         }
                         else if let Some(mut keyboard_input) = self.world.get_resource_mut::<InputConsumer>() {
-                            log::info!("Keyboard input exists {:?}", input);
                             keyboard_input.capture_keyboard_input(input);
                         }
 

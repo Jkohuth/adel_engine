@@ -58,7 +58,8 @@ impl System for KeyboardHandler {
         }
 
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
-        let mut transform_ref = world.borrow_component_mut::<Transform2dComponent>().unwrap();
+        let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
+        let mut camera = world.get_resource_mut::<Camera>().unwrap();
 
         for i in input_ref.iter().enumerate() {
             // _input_entity is used to track that this entity at this position in the Component Array exists
@@ -66,7 +67,9 @@ impl System for KeyboardHandler {
                 if let Some(transform) = &mut transform_ref[i.0] {
 
                     move_2d_object(&input_consumer.pressed, world.get_dt(), transform);
-                    log::info!("Input consumed Tranform {:?}", &transform);
+                    //camera.set_orthographic_projection_pos(1.0, 1.0, 10.0);
+                    //log::info!("Camera Info Position: {:?}\nProjection: {:?}", camera.position, camera.get_projection());
+                    //log::info!("Input consumed Tranform {:?}", &transform);
                     /* Camera Code will be back eventually -JAKOB 12-2022
                     //log::info!("Inside the move script camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
                     move_in_plane_xz(&input_consumer.pressed, world.get_dt(), camera_transform);
@@ -89,8 +92,8 @@ static LOOK_SPEED: f32 = 1.5;
 static MOVE_SPEED: f32 = 3.0;
 
 use nalgebra::{Vector2, Vector3};
-fn move_2d_object(keys: &HashSet<VirtualKeyCode>, dt: f32, transform: &mut Transform2dComponent) {
-    let mut move_dir = Vector2::default();
+fn move_2d_object(keys: &HashSet<VirtualKeyCode>, dt: f32, transform: &mut TransformComponent) {
+    let mut move_dir = Vector3::default();
     if keys.contains(&VirtualKeyCode::D) {
         move_dir.x += 1.0;
     }
@@ -104,7 +107,7 @@ fn move_2d_object(keys: &HashSet<VirtualKeyCode>, dt: f32, transform: &mut Trans
         move_dir.y -= 1.0;
     }
 
-    if Vector2::dot(&move_dir, &move_dir) > f32::EPSILON {
+    if Vector3::dot(&move_dir, &move_dir) > f32::EPSILON {
         transform.translation += MOVE_SPEED * dt * move_dir.normalize();
     }
 }
