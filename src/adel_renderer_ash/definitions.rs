@@ -68,6 +68,15 @@ pub struct PushConstantData2D {
     pub transform: nalgebra::Matrix3<f32>,
     pub color: nalgebra::Vector3<f32>
 }
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct UniformBufferObject {
+    pub model: nalgebra::Matrix4<f32>,
+    pub view:  nalgebra::Matrix4<f32>,
+    pub proj:  nalgebra::Matrix4<f32>,
+}
+
 #[derive(Debug)]
 pub struct TransformComponent {
     pub translation: Vector3<f32>,

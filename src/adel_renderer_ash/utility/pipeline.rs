@@ -6,6 +6,7 @@ use crate::adel_renderer_ash::definitions::{PushConstantData, PushConstantData2D
 
 pub struct AshPipeline {
     render_pass: vk::RenderPass,
+    descriptor_set_layout: vk::DescriptorSetLayout,
     graphics_pipeline: vk::Pipeline,
     pipeline_layout: vk::PipelineLayout,
 }
@@ -13,10 +14,13 @@ pub struct AshPipeline {
 impl AshPipeline {
     pub fn new(device: &ash::Device, format: vk::Format, extent: vk::Extent2D) -> Self {
         let render_pass = AshPipeline::create_render_pass(&device, format);
-
-        let (graphics_pipeline, pipeline_layout) = AshPipeline::create_graphics_pipeline(&device, render_pass.clone(), extent);
+        let descriptor_set_layout = AshPipeline::create_descriptor_set_layout(&device);
+        let pipeline_layout = AshPipeline::create_pipeline_layout(&device, descriptor_set_layout);
+        let graphics_pipeline = AshPipeline::create_graphics_pipeline(&device, render_pass.clone(), pipeline_layout, extent);
+        //let (graphics_pipeline, pipeline_layout) = AshPipeline::create_graphics_pipeline(&device, render_pass.clone(), descriptor_set_layout, extent);
         Self {
             render_pass,
+            descriptor_set_layout,
             graphics_pipeline,
             pipeline_layout,
         }
@@ -72,7 +76,42 @@ impl AshPipeline {
             }
 
     }
+    fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLayout {
+        let ubo_layout_bindings = [vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .build()
+        ];
 
+        let ubo_layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&ubo_layout_bindings)
+            .build();
+        unsafe {
+            device
+                .create_descriptor_set_layout(&ubo_layout_create_info, None)
+                .expect("Failed to create Descriptor Set Layout!")
+        }
+    }
+    fn create_pipeline_layout(device: &ash::Device, descriptor_set_layout: vk::DescriptorSetLayout) -> vk::PipelineLayout {
+        //let push_constant_range = [vk::PushConstantRange::builder()
+        //    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+        //    .offset(0)
+        //    .size(std::mem::size_of::<PushConstantData>() as u32)
+        //    .build()];
+        let set_layouts = [descriptor_set_layout];
+        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
+        //    .push_constant_ranges(&push_constant_range)
+            .set_layouts(&set_layouts)
+            .build();
+
+        unsafe {
+            device
+                .create_pipeline_layout(&pipeline_layout_create_info, None)
+                .expect("Failed to create pipeline layout!")
+        }
+    }
     fn create_shader_module(device: &ash::Device, code: &[u32]) -> vk::ShaderModule {
         let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(&code).build();
 
@@ -87,14 +126,15 @@ impl AshPipeline {
     fn create_graphics_pipeline(
         device: &ash::Device,
         render_pass: vk::RenderPass,
+        pipeline_layout: vk::PipelineLayout,
         swapchain_extent: vk::Extent2D,
-    ) -> (vk::Pipeline, vk::PipelineLayout) {
+    ) -> vk::Pipeline {
 
         // Create Shader Modules
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/triangle.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/triangle.frag", frag, glsl, entry="main");
-        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.vert", vert, glsl, entry="main");
-        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.frag", frag, glsl, entry="main");
+        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.vert", vert, glsl, entry="main");
+        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.frag", frag, glsl, entry="main");
+        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/uniform_buffer.vert", vert, glsl, entry="main");
+        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/uniform_buffer.frag", frag, glsl, entry="main");
         //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.vert", vert, glsl, entry="main");
         //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push_2d.frag", frag, glsl, entry="main");
         let vert_shader = AshPipeline::create_shader_module(&device, vert_spv);
@@ -232,20 +272,6 @@ impl AshPipeline {
         let pipeline_dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
             .dynamic_states(&dynamic_state)
             .build();
-        let push_constant_range = [vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-            .offset(0)
-            .size(std::mem::size_of::<PushConstantData>() as u32)
-            .build()];
-        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
-            .push_constant_ranges(&push_constant_range)
-            .build();
-
-        let pipeline_layout = unsafe {
-            device
-                .create_pipeline_layout(&pipeline_layout_create_info, None)
-                .expect("Failed to create pipeline layout!")
-        };
 
         let graphic_pipeline_create_infos = [vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stages)
@@ -280,8 +306,7 @@ impl AshPipeline {
             device.destroy_shader_module(vert_shader, None);
             device.destroy_shader_module(frag_shader, None);
         }
-
-        (graphics_pipelines[0], pipeline_layout)
+        graphics_pipelines[0]
     }
     pub fn recreate_render_pass(&mut self, device: &ash::Device, format: vk::Format) {
         let render_pass = AshPipeline::create_render_pass(&device, format);
@@ -297,8 +322,14 @@ impl AshPipeline {
     pub fn pipeline_layout(&self) -> vk::PipelineLayout {
         self.pipeline_layout
     }
+    pub fn descriptor_set_layout(&self) -> vk::DescriptorSetLayout {
+        self.descriptor_set_layout
+    }
     pub unsafe fn destroy_render_pass(&mut self, device: &ash::Device) {
         device.destroy_render_pass(self.render_pass, None);
+    }
+    pub unsafe fn destroy_descriptor_set_layout(&mut self, device: &ash::Device) {
+        device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
     }
     pub unsafe fn destroy_pipeline(&mut self, device: &ash::Device) {
         device.destroy_pipeline(self.graphics_pipeline, None);

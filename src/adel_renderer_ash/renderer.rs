@@ -28,6 +28,7 @@ use super::definitions::{
     PushConstantData2D,
     TransformComponent,
     TriangleComponent,
+    UniformBufferObject,
     VertexIndexComponent,
     Vertex2d,
     VertexBuffer,
@@ -53,9 +54,7 @@ pub struct RendererAsh {
     buffers: AshBuffers,
 
     sync_objects: SyncObjects,
-
     current_frame: usize,
-
     is_framebuffer_resized: bool,
 
     push_const: PushConstantData,
@@ -75,7 +74,6 @@ impl RendererAsh {
         let swapchain = AshSwapchain::new(&context, &device, &window);
         let pipeline = AshPipeline::new(&device, swapchain.format(), swapchain.extent());
         let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline);
-
         let push_const = PushConstantData {
             transform: nalgebra::Matrix4::identity(),
             color: nalgebra::Vector3::new(1.0, 0.0, 1.0),
@@ -265,16 +263,17 @@ impl RendererAsh {
         // isFrameStarted = true;
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
-
     // TODO: Break up this function
-    pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData)>) {
+    //pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData)>) {
+    pub fn draw_frame(&mut self, buffers: Vec<&BufferComponent>) {
         // Begin_frame requires a return of Image_index, wait_fences and command_buffer
         let (wait_fences, image_index, command_buffer) = self.begin_frame();
         self.begin_swapchain_render_pass(image_index, &command_buffer);
-
+        self.buffers.update_uniform_buffer(&self.device, self.current_frame);
         // Render Objects
         //bind pipeline
         let device_size_offsets: [vk::DeviceSize; 1] = [0];
+        let descriptor_sets_to_bind = [self.buffers.descriptor_sets[self.current_frame]];
         unsafe {
             self.device
                 .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
@@ -282,18 +281,27 @@ impl RendererAsh {
                 self.device
                     .cmd_bind_vertex_buffers(command_buffer,
                         0,
-                        &[buffer.0.vertex_buffer],
+                        &[buffer.vertex_buffer],
                         &device_size_offsets
                     );
-                self.device.cmd_bind_index_buffer(command_buffer, buffer.0.index_buffer, 0, vk::IndexType::UINT16);
-                self.device
-                    .cmd_push_constants(command_buffer,
-                        self.pipeline.pipeline_layout(),
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        0,
-                        as_bytes(&buffer.1)
-                    );
-                self.device.cmd_draw_indexed(command_buffer, buffer.0.indices_count, 1, 0, 0, 0);
+                self.device.cmd_bind_index_buffer(command_buffer, buffer.index_buffer, 0, vk::IndexType::UINT16);
+                self.device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pipeline.pipeline_layout(),
+                    0,
+                    &descriptor_sets_to_bind,
+                    &[]
+                );
+                //self.device
+                //    .cmd_push_constants(command_buffer,
+                //        self.pipeline.pipeline_layout(),
+                //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                //        0,
+                //        as_bytes(&buffer.1)
+                //    );
+
+                self.device.cmd_draw_indexed(command_buffer, buffer.indices_count, 1, 0, 0, 0);
             }
         }
 
@@ -383,11 +391,12 @@ impl System for RendererAsh {
         let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
         let transform_component = world.borrow_component::<TransformComponent>().unwrap();
         let camera = world.get_resource::<Camera>().unwrap();
-        let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData)> = Vec::new();
+        //let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData)> = Vec::new();
+        let mut buffers_push_constant: Vec<&BufferComponent> = Vec::new();
         for i in option_buffers.iter().enumerate() {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &transform_component[i.0] {
-                    buffers_push_constant.push((&buffer, create_push_constant_data(camera.get_projection(), &transform)));
+                    buffers_push_constant.push(&buffer);
                 }
             }
         }
@@ -429,9 +438,12 @@ impl Drop for RendererAsh {
             self.buffers.destroy_framebuffers(&self.device);
             self.buffers.free_command_buffers(&self.device);
             self.buffers.destroy_command_pools(&self.device);
+            self.buffers.destroy_uniform_buffers(&self.device);
+            self.buffers.destroy_descriptor_pool(&self.device);
 
             // Destorys Swapchain and ImageViews
             self.swapchain.destroy_swapchain(&self.device);
+            self.pipeline.destroy_descriptor_set_layout(&self.device);
             self.pipeline.destroy_render_pass(&self.device);
 
             // Destroys Pipeline and PipelineLayout
