@@ -2,6 +2,7 @@ use nalgebra::{Matrix4, Vector3};
 use more_asserts;
 
 pub struct Camera {
+    pub position: Vector3::<f32>,
     projection_matrix: Matrix4<f32>,
     view_matrix: Matrix4<f32>,
     _name: &'static str,
@@ -9,12 +10,13 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Self {
         Self {
+            position: Vector3::<f32>::default(),
             projection_matrix: Matrix4::identity(),
             view_matrix: Matrix4::identity(),
             _name: "camera",
         }
     }
-
+    // TODO: Need to be written with a Vector3 supplied for position of the camera
     pub fn set_orthographic_projection(&mut self, left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) {
         self.projection_matrix = Matrix4::identity();
 
@@ -26,7 +28,23 @@ impl Camera {
         self.projection_matrix[(3, 2)] = -near / (far - near);
 
     }
+    pub fn set_orthographic_projection_pos(&mut self, half_extent_h: f32, half_extent_v: f32, depth: f32) {
+        self.projection_matrix = Matrix4::identity();
+        let right =  self.position.x + half_extent_h;
+        let left =   self.position.x - half_extent_h;
+        let bottom = self.position.y + half_extent_v;
+        let top =    self.position.y - half_extent_v;
+        let near =   self.position.z;
+        let far =    self.position.z + depth;
 
+        self.projection_matrix[(0, 0)] = 2.0 / (right - left);
+        self.projection_matrix[(1, 1)] = 2.0 / (bottom - top);
+        self.projection_matrix[(2, 2)] = 1.0 / (far - near);
+        self.projection_matrix[(3, 0)] = -(right + left) / (right - left);
+        self.projection_matrix[(3, 1)] = -(bottom + top) / (bottom - top);
+        self.projection_matrix[(3, 2)] = -near / (far - near);
+
+    }
     pub fn set_perspective_projection(&mut self, fovy: f32, aspect: f32, near: f32, far: f32) {
         more_asserts::assert_gt!((aspect - f32::MIN).abs(), 0.0);
 

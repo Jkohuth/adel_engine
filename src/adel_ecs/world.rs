@@ -1,5 +1,6 @@
 use std::cell::{Ref, RefCell, RefMut };
 use std::any::TypeId;
+use crate::adel_tools::print_type_of;
 
 #[allow(unused_imports)]
 use std::collections::HashMap;
@@ -27,7 +28,10 @@ impl<T: 'static> Component for RefCell<Vec<Option<T>>> {
         self.get_mut().push(None)
     }
 }
-
+// Resources are unique objects (one per application) that may be accessed from world at any time. The idea
+// behind resources was not to have multiple components that share the same data. For example, user input may
+// effect multiple different systems and components but there is only one set of it. Each component doesn't need
+// the duplicated data.
 pub trait Resource {
     fn resource_as(&self) -> &dyn std::any::Any;
     fn resource_as_mut(&mut self) -> &mut dyn std::any::Any;
@@ -38,7 +42,6 @@ impl<T: 'static> Resource for RefCell<T> {
     fn resource_as(&self) -> &dyn std::any::Any {
         self as &dyn std::any::Any
     }
-    // Mutability borrow Vec of EntityIds taht represent a component
     fn resource_as_mut(&mut self) -> &mut dyn std::any::Any {
         self as &mut dyn std::any::Any
     }
@@ -131,7 +134,7 @@ impl World {
         //self.resources.insert(type_id, (&mut resource as *mut R).cast::<u8>());
         self.resources.insert(type_id, boxed_resource);
     }
-    // The + 'static lets the program no that the type provided will be valid for the duration of the program and not a reference
+    // The + 'static lets the program know that the type provided will be valid for the duration of the program and not a reference
     pub fn get_resource<R: 'static>(&self) -> Option<Ref<R>> {
         let type_id = TypeId::of::<R>();
         let boxed_resource = self.resources.get(&type_id).unwrap();
@@ -144,7 +147,13 @@ impl World {
     }
     pub fn get_resource_mut<R: 'static>(&self) -> Option<RefMut<R>> {
         let type_id = TypeId::of::<R>();
-        let box_resource = self.resources.get(&type_id).unwrap_or(return None);
+        let box_resource = match self.resources.get(&type_id){
+            Some(box_resource) => box_resource,
+            None => {
+                log::info!("ERROR: No resource found {:?}", print_type_of(&type_id));
+                return None;
+            }
+        };
         if let Some(resource) =  box_resource.resource_as().downcast_ref::<RefCell<R>>() {
             return Some(resource.borrow_mut());
         } else {
@@ -161,7 +170,7 @@ impl World {
     }
 
     /*
-        Old Resource Code attempting to Use Raw pointers, led to Erros when the memory being allocated was on the stack
+        Old Resource Code attempting to Use Raw pointers, led to Errors when the memory being allocated was on the stack
         and dereferencing the pointers (whose values had been dropped by that time) led to a segmentation fault. I don't
         want to remove this code as I want to revisit this at a later time and perhaps explain the various differences
         between Box<dyn TraitObject> vs *mut u8 pointer that is casted to the correct type

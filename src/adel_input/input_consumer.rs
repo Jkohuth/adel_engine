@@ -7,7 +7,7 @@ pub struct InputConsumer {
 }
 
 impl InputConsumer {
-    pub fn keyboard_input_system(&mut self, keyboard_input: &KeyboardInput) {
+    pub fn capture_keyboard_input(&mut self, keyboard_input: &KeyboardInput) {
         let key_code = keyboard_input.virtual_keycode.unwrap();
         match keyboard_input.state {
             ElementState::Pressed => { self.pressed.insert(key_code.clone()); },

@@ -267,7 +267,7 @@ impl RendererAsh {
     }
 
     // TODO: Break up this function
-    pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData2D)>) {
+    pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData)>) {
         // Begin_frame requires a return of Image_index, wait_fences and command_buffer
         let (wait_fences, image_index, command_buffer) = self.begin_frame();
         self.begin_swapchain_render_pass(image_index, &command_buffer);
@@ -336,17 +336,18 @@ impl RendererAsh {
 
 
 }
-use nalgebra::{Matrix2, Matrix4};
+use nalgebra::{Matrix2, Matrix3, Matrix4};
 use crate::adel_renderer_ash::Transform2dComponent;
-pub fn create_push_constant_data_proj(camera_projection : Matrix4<f32>) -> PushConstantData {
+pub fn create_push_constant_data_tmp(tmp : Matrix4<f32>) -> PushConstantData {
     PushConstantData {
-        transform: Matrix4::identity(), //camera_projection,
-        color: Vector3::new(0.0, 0.0, 0.0),
+        transform: tmp, //camera_projection,
+        color: Vector3::new(0.0, 1.0, 0.0),
     }
 }
-pub fn create_push_constant_data_2d(transform: &Transform2dComponent) -> PushConstantData2D {
+pub fn create_push_constant_data_2d(transform_matrix: Matrix3<f32>) -> PushConstantData2D {
     PushConstantData2D {
-        transform: Matrix2::identity(), //camera_projection,
+        transform: transform_matrix, //camera_projection,
+        //transform: Matrix3::identity(),
         color: Vector3::new(0.0, 1.0, 0.0),
     }
 }
@@ -380,13 +381,13 @@ impl System for RendererAsh {
     }
     fn run(&mut self, world: &mut World) {
         let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
-        let transform2d_component = world.borrow_component::<Transform2dComponent>().unwrap();
-        let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData2D)> = Vec::new();
+        let transform_component = world.borrow_component::<TransformComponent>().unwrap();
+        let camera = world.get_resource::<Camera>().unwrap();
+        let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData)> = Vec::new();
         for i in option_buffers.iter().enumerate() {
             if let Some(buffer) = i.1 {
-                if let Some(transform) = &transform2d_component[i.0] {
-                    buffers_push_constant.push((&buffer, create_push_constant_data_2d(transform)));
-
+                if let Some(transform) = &transform_component[i.0] {
+                    buffers_push_constant.push((&buffer, create_push_constant_data(camera.get_projection(), &transform)));
                 }
             }
         }
