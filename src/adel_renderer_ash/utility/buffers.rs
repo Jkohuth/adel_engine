@@ -1,5 +1,6 @@
 use ash::vk;
-
+use std::path::Path;
+use png;
 use super::{
     pipeline::AshPipeline,
     swapchain::AshSwapchain,
@@ -426,6 +427,106 @@ impl AshBuffers {
                 .unmap_memory(self.uniform_buffers_memory[current_image]);
         }
     }
+    pub fn create_texture_image(context: &AshContext, device: &ash::Device, submit_queue: vk::Queue, image_path: &Path)
+        -> (vk::Image, vk::DeviceMemory)
+    {
+        let image_file = std::fs::File::open(image_path).unwrap();
+        let decoder = png::Decoder::new(image_file);
+        let mut reader = decoder.read_info().unwrap();
+
+        let mut pixels = vec![0; reader.info().raw_bytes()];
+        reader.next_frame(&mut pixels).unwrap();
+        let size = reader.info().raw_bytes() as u64;
+        let (width, height) = reader.info().size();
+        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(
+            context,
+            device,
+            size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+        );
+
+        unsafe {
+            let data_ptr = device
+                .map_memory(
+                    staging_buffer_memory,
+                    0,
+                    size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("Failed to Map Memory") as *mut u8;
+
+            data_ptr.copy_from_nonoverlapping(pixels.as_ptr(), size as usize);
+
+            device.unmap_memory(staging_buffer_memory);
+        }
+        AshBuffers::create_image(
+            context,
+            device,
+            width,
+            height,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL
+        )
+    }
+    fn create_image(
+        context: &AshContext,
+        device: &ash::Device,
+        width: u32,
+        height: u32,
+        format: vk::Format,
+        tiling: vk::ImageTiling,
+        usage: vk::ImageUsageFlags,
+        properties: vk::MemoryPropertyFlags,
+    ) -> (vk::Image, vk::DeviceMemory) {
+        let info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(vk::Extent3D {
+                width,
+                height,
+                depth: 1,
+            })
+            .mip_levels(1)
+            .array_layers(1)
+            .format(format)
+            .tiling(tiling)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(usage)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .build();
+
+        let texture_image = unsafe {
+            device.create_image(&info, None).expect("Failed to create image")
+        };
+
+        let tex_mem_requirements = unsafe {
+            device.get_image_memory_requirements(texture_image)
+        };
+        let tex_mem_properties =
+            unsafe { context.instance.get_physical_device_memory_properties(context.physical_device) };
+        let tex_memory_type = find_memory_type(
+            tex_mem_requirements.memory_type_bits,
+            properties,
+            tex_mem_properties,
+        );
+        let info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(tex_mem_requirements.size)
+            .memory_type_index(tex_memory_type)
+            .build();
+
+        let texture_image_memory = unsafe {
+            device.allocate_memory(&info, None).expect("Failed to allocate Texture Image memroy")
+        };
+        unsafe {
+            device.bind_image_memory(texture_image, texture_image_memory, 0).expect("Failed to bind Texture to Memory");
+        }
+
+        (texture_image, texture_image_memory)
+    }
+
     pub fn destroy_uniform_buffers(&mut self, device: &ash::Device) {
         unsafe{
             self.uniform_buffers.iter().for_each(|b| device.destroy_buffer(*b, None) );
