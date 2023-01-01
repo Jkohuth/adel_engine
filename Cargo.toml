@@ -17,13 +17,12 @@ inline-spirv = "0.1.4"
 
 
 winit = "0.27.0"
-glam = "0.21.2"
+#glam = "0.21.2"
 chrono = "0.4.19"
 more-asserts = "0.3.0"
 log = "0.4"
 simple_logger = "2.1.0"
-#image = "0.24.0"
-png = "0.17"
+image = "0.24.0"
 #bytemuck = { version = "1.7", features = ["derive", "extern_crate_std", "min_const_generics"] }
 tobj = "3.2.3"
 nalgebra = "0.31.0"
@@ -34,21 +33,25 @@ num = "0.4.0"
 name = "hello_world"
 path = "bin/hello_world.rs"
 
-[[bin]]
-name = "cube"
-path = "bin/cube.rs"
+#[[bin]]
+#name = "cube"
+#path = "bin/cube.rs"
+#
+#[[bin]]
+#name = "ash"
+#path = "bin/ash.rs"
+#
+#[[bin]]
+#name = "index_buffer"
+#path = "bin/index_buffer.rs"
+#
+#[[bin]]
+#name = "movement"
+#path = "bin/movement.rs"
 
 [[bin]]
-name = "ash"
-path = "bin/ash.rs"
-
-[[bin]]
-name = "index_buffer"
-path = "bin/index_buffer.rs"
-
-[[bin]]
-name = "movement"
-path = "bin/movement.rs"
+name = "texture"
+path = "bin/texture.rs"
 
 [[bench]]
 name = "vulkano_bench"

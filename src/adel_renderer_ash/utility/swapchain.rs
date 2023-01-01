@@ -18,7 +18,7 @@ impl AshSwapchain {
         let present_queue =
             unsafe { device.get_device_queue(context.queue_family.present_family.unwrap(), 0) };
         let swapchain_info = AshSwapchain::create_swapchain(context, device, window);
-        let image_views = AshSwapchain::create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
+        let image_views = AshSwapchain::create_swapchain_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
         Self {
             graphics_queue,
             present_queue,
@@ -160,12 +160,12 @@ impl AshSwapchain {
             swapchain_images,
         }
     }
-    fn create_image_views(
+    fn create_swapchain_image_views(
         device: &ash::Device,
         surface_format: vk::Format,
         images: &Vec<vk::Image>,
     ) -> Vec<vk::ImageView> {
-        let imagesviews: Vec<vk::ImageView> = images.iter()
+        let images_views: Vec<vk::ImageView> = images.iter()
             .map(|&image| {
                 AshSwapchain::create_image_view(
                     device,
@@ -176,16 +176,16 @@ impl AshSwapchain {
                 )
             }).collect();
 
-        imagesviews
+        images_views
     }
-    fn create_image_view(
+    pub fn create_image_view(
         device: &ash::Device,
         image: vk::Image,
         format: vk::Format,
         aspect_flags: vk::ImageAspectFlags,
         mip_levels: u32,
     ) -> vk::ImageView {
-        let imageview_create_info = vk::ImageViewCreateInfo::builder()
+        let image_view_info = vk::ImageViewCreateInfo::builder()
             .image(image)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(format)
@@ -207,14 +207,14 @@ impl AshSwapchain {
 
         unsafe {
             device
-                .create_image_view(&imageview_create_info, None)
+                .create_image_view(&image_view_info, None)
                 .expect("Failed to create Image View!")
         }
     }
 
     pub fn recreate_swapchain(&mut self, context: &AshContext, device: &ash::Device, window: &Window) {
         let swapchain_info = AshSwapchain::create_swapchain(context, device, window);
-        let image_views = AshSwapchain::create_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
+        let image_views = AshSwapchain::create_swapchain_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
         self.swapchain_info = swapchain_info;
         self.image_views = image_views;
     }

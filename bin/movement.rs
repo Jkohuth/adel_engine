@@ -10,17 +10,17 @@ fn main() {
     let mut world = World::new();
 
     let vertices: Vec<Vertex> = vec![
-        Vertex { position: Vector3::new(-0.25, -0.25, 0.0), color: Vector3::new(0.0, 0.0, 1.0) },
-        Vertex { position: Vector3::new( 0.25, -0.25, 0.0), color: Vector3::new(0.0, 0.0, 1.0) },
-        Vertex { position: Vector3::new( 0.25,  0.25, 0.0), color: Vector3::new(0.0, 0.0, 1.0) },
-        Vertex { position: Vector3::new(-0.25,  0.25, 0.0), color: Vector3::new(0.0, 0.0, 1.0) },
+        Vertex { position: Vector3::new(-0.25, -0.25, 0.0), color: Vector3::new(0.0, 0.0, 1.0), tex_coord: Vector2::new(0.0, 0.0) },
+        Vertex { position: Vector3::new( 0.25, -0.25, 0.0), color: Vector3::new(0.0, 0.0, 1.0), tex_coord: Vector2::new(0.0, 0.0) },
+        Vertex { position: Vector3::new( 0.25,  0.25, 0.0), color: Vector3::new(0.0, 0.0, 1.0), tex_coord: Vector2::new(0.0, 0.0) },
+        Vertex { position: Vector3::new(-0.25,  0.25, 0.0), color: Vector3::new(0.0, 0.0, 1.0), tex_coord: Vector2::new(0.0, 0.0) },
     ];
     let indices: Vec<u16> = vec![0, 1, 2, 2, 3, 0];
     let vertices2: Vec<Vertex> = vec![
-        Vertex { position: Vector3::new(-0.25, -0.25, 0.0), color: Vector3::new(0.0, 1.0, 0.0) },
-        Vertex { position: Vector3::new( 0.25, -0.25, 0.0), color: Vector3::new(0.0, 1.0, 0.0) },
-        Vertex { position: Vector3::new( 0.25,  0.25, 0.0), color: Vector3::new(0.0, 1.0, 0.0) },
-        Vertex { position: Vector3::new(-0.25,  0.25, 0.0), color: Vector3::new(0.0, 1.0, 0.0) },
+        Vertex { position: Vector3::new(-0.25, -0.25, 0.0), color: Vector3::new(0.0, 1.0, 0.0), tex_coord: Vector2::new(0.0, 0.1) },
+        Vertex { position: Vector3::new( 0.25, -0.25, 0.0), color: Vector3::new(0.0, 1.0, 0.0), tex_coord: Vector2::new(0.0, 0.0) },
+        Vertex { position: Vector3::new( 0.25,  0.25, 0.0), color: Vector3::new(0.0, 1.0, 0.0), tex_coord: Vector2::new(0.0, 0.0) },
+        Vertex { position: Vector3::new(-0.25,  0.25, 0.0), color: Vector3::new(0.0, 1.0, 0.0), tex_coord: Vector2::new(0.0, 0.0) },
     ];
 
     let vi_component = VertexIndexComponent {

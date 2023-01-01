@@ -165,6 +165,10 @@ impl AshContext {
         surface_info: &SurfaceInfo,
     ) -> bool {
         let device_features = unsafe { instance.get_physical_device_features(physical_device) };
+        if device_features.sampler_anisotropy != vk::TRUE {
+            log::warn!("Physical Device does not support Sampler Anisotropy");
+            return false;
+        }
         let indices = AshContext::find_queue_family(instance, physical_device, surface_info);
 
         // Missing queue family, either graphics or present, return false
@@ -322,7 +326,7 @@ pub fn create_logical_device(
         .build();
         queue_create_infos.push(queue_create_info);
     }
-    let physical_device_features = vk::PhysicalDeviceFeatures::builder().build();
+    let physical_device_features = vk::PhysicalDeviceFeatures::builder().sampler_anisotropy(true).build();
 
     let requred_validation_layer_raw_names: Vec<CString> = required_validation_layers
         .iter()

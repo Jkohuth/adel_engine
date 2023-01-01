@@ -403,6 +403,7 @@ impl System for RendererAsh {
 
         self.draw_frame(buffers_push_constant);
     }
+    // TODO: When Uniform buffers, Textures, and Models are abstracted to components, they need to be freed here
     fn shutdown(&mut self, world: &mut World) {
         unsafe {
             self.device.device_wait_idle().expect("ERROR: Failed to wait device idle on shutdown");
@@ -439,6 +440,7 @@ impl Drop for RendererAsh {
             self.buffers.free_command_buffers(&self.device);
             self.buffers.destroy_command_pools(&self.device);
             self.buffers.destroy_uniform_buffers(&self.device);
+            self.buffers.destroy_texture(&self.device);
             self.buffers.destroy_descriptor_pool(&self.device);
 
             // Destorys Swapchain and ImageViews
