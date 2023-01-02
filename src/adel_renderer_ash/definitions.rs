@@ -1,3 +1,4 @@
+use ash::vk;
 use nalgebra::{
     Matrix2,
     Matrix3,
@@ -19,8 +20,41 @@ pub struct Vertex2d {
 #[repr(C)]
 pub struct Vertex {
     pub position: nalgebra::Vector3::<f32>,
-    pub color: nalgebra::Vector3::<f32>
+    pub color: nalgebra::Vector3::<f32>,
+    pub tex_coord: nalgebra::Vector2::<f32>
 }
+
+impl Vertex {
+    pub fn binding_descriptions() -> [vk::VertexInputBindingDescription; 1] {
+        [vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Vertex>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()]
+    }
+    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
+        let pos_attrib = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(0)
+            .build();
+        let color_attrib = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(std::mem::size_of::<nalgebra::Vector3<f32>>() as u32)
+            .build();
+        let tex_coord = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(2)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>()) as u32)
+            .build();
+        [pos_attrib, color_attrib, tex_coord]
+    }
+}
+
 pub struct TriangleComponent {
     pub verticies: Vec<Vertex2d>
 }
@@ -68,6 +102,15 @@ pub struct PushConstantData2D {
     pub transform: nalgebra::Matrix3<f32>,
     pub color: nalgebra::Vector3<f32>
 }
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct UniformBufferObject {
+    pub model: nalgebra::Matrix4<f32>,
+    pub view:  nalgebra::Matrix4<f32>,
+    pub proj:  nalgebra::Matrix4<f32>,
+}
+
 #[derive(Debug)]
 pub struct TransformComponent {
     pub translation: Vector3<f32>,
