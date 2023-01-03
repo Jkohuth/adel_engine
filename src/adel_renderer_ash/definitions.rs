@@ -111,7 +111,7 @@ pub struct UniformBufferObject {
     pub proj:  nalgebra::Matrix4<f32>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct TransformComponent {
     pub translation: Vector3<f32>,
     pub scale: Vector3<f32>,

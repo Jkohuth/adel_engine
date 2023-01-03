@@ -289,6 +289,19 @@ impl AshContext {
         }
         true
     }
+    pub fn get_supported_format(&self, candidates: &[vk::Format], tiling: vk::ImageTiling, features: vk::FormatFeatureFlags) -> vk::Format {
+        unsafe {
+            candidates.iter().cloned().find(|f| {
+                let properties = self.instance().get_physical_device_format_properties(self.physical_device, *f);
+                match tiling {
+                    vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
+                    vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
+                    _ => false,
+                }
+            }).unwrap()
+        }
+    }
+
     // Other structs require device to cleanup resources properly, I'm providing a cleanup function
     // here in order to properly remove it in the drop function
     pub unsafe fn destroy_context(&mut self) {
