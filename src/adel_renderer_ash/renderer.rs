@@ -11,23 +11,17 @@ use crate::adel_ecs::{System, World};
 // TODO: Create a prelude and add these to it
 use crate::adel_renderer_ash::utility::{
     constants::*,
-    platforms,
-    structures,
-    tools,
     swapchain::AshSwapchain,
     context::{AshContext, create_logical_device},
     pipeline::AshPipeline,
     buffers::AshBuffers,
-    buffers,
     sync::SyncObjects,
 };
 use super::definitions::{
     BufferComponent,
     create_push_constant_data,
     PushConstantData,
-    PushConstantData2D,
     TransformComponent,
-    TriangleComponent,
     UniformBufferObject,
     VertexIndexComponent,
     Vertex2d,
@@ -36,7 +30,6 @@ use super::definitions::{
 use crate::adel_camera::Camera;
 use crate::adel_tools::*;
 
-use crate::adel_winit::WinitWindow;
 use winit::window::Window;
 use std::rc::{Rc};
 const NAME: &'static str = "Renderer";
@@ -57,7 +50,6 @@ pub struct RendererAsh {
     current_frame: usize,
     is_framebuffer_resized: bool,
 
-    push_const: PushConstantData,
     pub window: Rc<Window>,
 
     name: &'static str,
@@ -72,12 +64,9 @@ impl RendererAsh {
         let context = AshContext::new(&entry, &window);
         let device = create_logical_device(&context, &VALIDATION_LAYERS.to_vec());
         let swapchain = AshSwapchain::new(&context, &device, &window);
-        let pipeline = AshPipeline::new(&device, swapchain.format(), swapchain.extent());
+
+        let pipeline = AshPipeline::new(&device, swapchain.format(), AshBuffers::get_depth_format(&context), swapchain.extent());
         let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline);
-        let push_const = PushConstantData {
-            transform: nalgebra::Matrix4::identity(),
-            color: nalgebra::Vector3::new(1.0, 0.0, 1.0),
-        };
 
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT);
 
@@ -92,7 +81,7 @@ impl RendererAsh {
             current_frame: 0,
             is_framebuffer_resized: false,
 
-            push_const,
+
             window,
             name: NAME,
             is_frame_started: false,
@@ -323,12 +312,13 @@ impl RendererAsh {
             &self.device,
             &self.window,
         );
-
+        self.buffers.recreate_depth_image(&self.context, &self.device, self.swapchain.swapchain_info.swapchain_extent);
         self.pipeline.recreate_render_pass(&self.device, self.swapchain.swapchain_info.swapchain_format);
         self.buffers.recreate_framebuffers(
             &self.device,
             self.pipeline.render_pass().clone(),
             &self.swapchain.image_views(),
+            self.buffers.depth_image_view().clone(),
             self.swapchain.extent(),
         );
         // NOTE: sync_objects may need to be recreated if the total number of frames in flight changed
@@ -339,6 +329,7 @@ impl RendererAsh {
             self.swapchain.destroy_swapchain(&self.device);
             self.pipeline.destroy_render_pass(&self.device);
             self.buffers.destroy_framebuffers(&self.device);
+            self.buffers.destroy_depth_image(&self.device);
         }
     }
 
@@ -349,13 +340,6 @@ use crate::adel_renderer_ash::Transform2dComponent;
 pub fn create_push_constant_data_tmp(tmp : Matrix4<f32>) -> PushConstantData {
     PushConstantData {
         transform: tmp, //camera_projection,
-        color: Vector3::new(0.0, 1.0, 0.0),
-    }
-}
-pub fn create_push_constant_data_2d(transform_matrix: Matrix3<f32>) -> PushConstantData2D {
-    PushConstantData2D {
-        transform: transform_matrix, //camera_projection,
-        //transform: Matrix3::identity(),
         color: Vector3::new(0.0, 1.0, 0.0),
     }
 }
@@ -434,14 +418,7 @@ impl Drop for RendererAsh {
             // Destroys Fences and Semaphores
             self.sync_objects.cleanup_sync_objects(&self.device, MAX_FRAMES_IN_FLIGHT);
 
-            // Framebuffers, Commandbuffers, and CommandPool need cleanup
-            // Framebuffers need to be separated as they are removed when recreating swapchain
-            self.buffers.destroy_framebuffers(&self.device);
-            self.buffers.free_command_buffers(&self.device);
-            self.buffers.destroy_command_pools(&self.device);
-            self.buffers.destroy_uniform_buffers(&self.device);
-            self.buffers.destroy_texture(&self.device);
-            self.buffers.destroy_descriptor_pool(&self.device);
+            self.buffers.destroy_all(&self.device);
 
             // Destorys Swapchain and ImageViews
             self.swapchain.destroy_swapchain(&self.device);

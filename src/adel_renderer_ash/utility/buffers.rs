@@ -25,16 +25,25 @@ pub struct AshBuffers {
     texture_image_memory: vk::DeviceMemory,
     texture_image_view: vk::ImageView,
     texture_sample: vk::Sampler,
+
+    depth_image: vk::Image,
+    depth_image_memory: vk::DeviceMemory,
+    depth_image_view: vk::ImageView,
+
 }
 impl AshBuffers {
     pub fn new(device: &ash::Device, context: &AshContext, swapchain: &AshSwapchain, pipeline: &AshPipeline) -> Self {
+        let command_pool = AshBuffers::create_command_pool(&device, &context.queue_family, vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+        let graphics_transient_queue = swapchain.graphics_queue.clone();
+        let (depth_image, depth_image_memory, depth_image_view) = AshBuffers::create_depth_image(
+            &context, &device, swapchain.swapchain_info.swapchain_extent, &command_pool, graphics_transient_queue);
         let framebuffers = AshBuffers::create_framebuffers(
             &device,
             pipeline.render_pass().clone(),
             &swapchain.image_views,
+            depth_image_view,
             swapchain.extent()
         );
-        let command_pool = AshBuffers::create_command_pool(&device, &context.queue_family, vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
         let transient_command_pool = AshBuffers::create_command_pool(&device, &context.queue_family, vk::CommandPoolCreateFlags::TRANSIENT);
         let (uniform_buffers, uniform_buffers_memory) = AshBuffers::create_uniform_buffers(&context, &device);
         let descriptor_pool = AshBuffers::create_descriptor_pool(&device);
@@ -51,25 +60,29 @@ impl AshBuffers {
             command_buffers,
             descriptor_pool,
             descriptor_sets,
-            graphics_transient_queue: swapchain.graphics_queue.clone(),
+            graphics_transient_queue,
             uniform_buffers,
             uniform_buffers_memory,
             texture_image,
             texture_image_memory,
             texture_image_view,
-            texture_sample
+            texture_sample,
+            depth_image,
+            depth_image_memory,
+            depth_image_view,
         }
     }
     fn create_framebuffers(
         device: &ash::Device,
         render_pass: vk::RenderPass,
         image_views: &Vec<vk::ImageView>,
+        depth_image_view: vk::ImageView,
         swapchain_extent: vk::Extent2D,
     ) -> Vec<vk::Framebuffer> {
         let mut framebuffers = vec![];
 
         for &image_view in image_views.iter() {
-            let attachments = [image_view];
+            let attachments = [image_view, depth_image_view];
 
             let framebuffer_create_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(render_pass)
@@ -198,11 +211,12 @@ impl AshBuffers {
         }
         descriptor_sets
     }
-    pub fn recreate_framebuffers(&mut self, device: &ash::Device, render_pass: vk::RenderPass, image_views: &Vec<vk::ImageView>, extent: vk::Extent2D) {
+    pub fn recreate_framebuffers(&mut self, device: &ash::Device, render_pass: vk::RenderPass, image_views: &Vec<vk::ImageView>, depth_image_view: vk::ImageView, extent: vk::Extent2D) {
         let framebuffers = AshBuffers::create_framebuffers(
             device,
             render_pass,
             image_views,
+            depth_image_view,
             extent,
         );
         self.framebuffers = framebuffers;
@@ -581,8 +595,24 @@ impl AshBuffers {
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) {
+        /* TODO: Causing Errors on recreation, not in mood to debug now 2-1-23 22:02 JK
+        let aspect_mask = if new_layout == vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+            match format {
+                vk::Format::D32_SFLOAT_S8_UINT | vk::Format::D24_UNORM_S8_UINT =>
+                    vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL,
+                _ => vk::ImageAspectFlags::COLOR
+            }
+        } else {
+            vk::ImageAspectFlags::COLOR
+        };*/
         let (src_access_mask, dst_access_mask, src_stage_mask, dst_stage_mask) =
         match (old_layout, new_layout) {
+            //(vk::ImageLayout::UNDEFINED, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL) => (
+            //    vk::AccessFlags::empty(),
+            //    vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            //    vk::PipelineStageFlags::TOP_OF_PIPE,
+            //    vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+            //),
             (vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => (
                 vk::AccessFlags::empty(),
                 vk::AccessFlags::TRANSFER_WRITE,
@@ -601,6 +631,7 @@ impl AshBuffers {
         let command_buffer = AshBuffers::begin_single_time_commands(device, command_pool);
         let subresource = vk::ImageSubresourceRange::builder()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
+            //.aspect_mask(aspect_mask)
             .base_mip_level(0)
             .level_count(1)
             .base_array_layer(0)
@@ -703,131 +734,74 @@ impl AshBuffers {
             device.destroy_sampler(self.texture_sample, None);
         }
     }
+    pub fn create_depth_image(context: &AshContext, device: &ash::Device, extent: vk::Extent2D, command_pool: &vk::CommandPool, submit_queue: vk::Queue)
+        -> (vk::Image, vk::DeviceMemory, vk::ImageView)
+    {
 
-}
+        let format = AshBuffers::get_depth_format(context);
+        let (depth_image, depth_image_memory) = AshBuffers::create_image(
+            context,
+            device,
+            extent.width,
+            extent.height,
+            format,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL
+        );
+        let depth_image_view = AshSwapchain::create_image_view(device, depth_image, format, vk::ImageAspectFlags::DEPTH, 1);
 
-pub fn create_vertex_buffer_from_triangle(
-    context: &AshContext,
-    device: &ash::Device,
-    triangle: &TriangleComponent
-) -> (vk::Buffer, vk::DeviceMemory) {
-    let vertex_buffer_create_info = vk::BufferCreateInfo::builder()
-        .size(std::mem::size_of_val(&triangle.verticies) as u64)
-        .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE)
-        //.queue_family_indices(0)
-        .build();
-    let vertex_buffer = unsafe {
-        device
-            .create_buffer(&vertex_buffer_create_info, None)
-            .expect("Failed to create Vertex Buffer")
-    };
-    let mem_requirements = unsafe { device.get_buffer_memory_requirements(vertex_buffer) };
-    let mem_properties =
-        unsafe { context.instance.get_physical_device_memory_properties(context.physical_device) };
-    let required_memory_flags: vk::MemoryPropertyFlags =
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
-    let memory_type = find_memory_type(
-        mem_requirements.memory_type_bits,
-        required_memory_flags,
-        mem_properties,
-    );
+        /*AshBuffers::transition_image_layout(
+            device,
+            depth_image,
+            format,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            command_pool,
+            submit_queue
+        );*/
 
-    let allocate_info = vk::MemoryAllocateInfo::builder()
-        .allocation_size(mem_requirements.size)
-        .memory_type_index(memory_type)
-        .build();
-
-    let vertex_buffer_memory = unsafe {
-        device
-            .allocate_memory(&allocate_info, None)
-            .expect("Failed to allocate vertex buffer memory!")
-    };
-
-    unsafe {
-        device
-            .bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)
-            .expect("Failed to bind Buffer");
-
-        let data_ptr = device
-            .map_memory(
-                vertex_buffer_memory,
-                0,
-                vertex_buffer_create_info.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .expect("Failed to Map Memory") as *mut Vertex2d;
-
-        data_ptr.copy_from_nonoverlapping(triangle.verticies.as_ptr(), triangle.verticies.len());
-
-        device.unmap_memory(vertex_buffer_memory);
+        (depth_image, depth_image_memory, depth_image_view)
     }
-
-    (vertex_buffer, vertex_buffer_memory)
-
-
-}
-
-pub fn create_vertex_buffer_bak(
-    instance: &ash::Instance,
-    device: &ash::Device,
-    physical_device: vk::PhysicalDevice,
-    vertices_data: &Vec<Vertex2d>
-) -> (vk::Buffer, vk::DeviceMemory) {
-    let vertex_buffer_create_info = vk::BufferCreateInfo::builder()
-        .size(std::mem::size_of_val(vertices_data) as u64)
-        .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE)
-        //.queue_family_indices(0)
-        .build();
-    let vertex_buffer = unsafe {
-        device
-            .create_buffer(&vertex_buffer_create_info, None)
-            .expect("Failed to create Vertex Buffer")
-    };
-
-    let mem_requirements = unsafe { device.get_buffer_memory_requirements(vertex_buffer) };
-    let mem_properties =
-        unsafe { instance.get_physical_device_memory_properties(physical_device) };
-    let required_memory_flags: vk::MemoryPropertyFlags =
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
-    let memory_type = find_memory_type(
-        mem_requirements.memory_type_bits,
-        required_memory_flags,
-        mem_properties,
-    );
-
-    let allocate_info = vk::MemoryAllocateInfo::builder()
-        .allocation_size(mem_requirements.size)
-        .memory_type_index(memory_type)
-        .build();
-
-    let vertex_buffer_memory = unsafe {
-        device
-            .allocate_memory(&allocate_info, None)
-            .expect("Failed to allocate vertex buffer memory!")
-    };
-
-    unsafe {
-        device
-            .bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)
-            .expect("Failed to bind Buffer");
-
-        let data_ptr = device
-            .map_memory(
-                vertex_buffer_memory,
-                0,
-                vertex_buffer_create_info.size,
-                vk::MemoryMapFlags::empty(),
-            )
-            .expect("Failed to Map Memory") as *mut Vertex2d;
-
-        data_ptr.copy_from_nonoverlapping(vertices_data.as_ptr(), vertices_data.len());
-
-        device.unmap_memory(vertex_buffer_memory);
+    pub fn recreate_depth_image(&mut self, context: &AshContext, device: &ash::Device, extent: vk::Extent2D) {
+        let (depth_image, depth_image_memory, depth_image_view) = AshBuffers::create_depth_image(context, device, extent, &self.command_pool, self.graphics_transient_queue);
+        self.depth_image = depth_image;
+        self.depth_image_memory = depth_image_memory;
+        self.depth_image_view = depth_image_view;
     }
+    pub fn get_depth_format(context: &AshContext) -> vk::Format {
+        let candidates = &[
+            vk::Format::D32_SFLOAT,
+            vk::Format::D32_SFLOAT_S8_UINT,
+            vk::Format::D24_UNORM_S8_UINT
+        ];
 
-    (vertex_buffer, vertex_buffer_memory)
+        context.get_supported_format(candidates, vk::ImageTiling::OPTIMAL, vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
+    }
+    pub fn depth_image_view(&self) -> vk::ImageView {
+        self.depth_image_view
+    }
+    pub fn destroy_depth_image(&mut self, device: &ash::Device) {
+        unsafe {
+            device.destroy_image(self.depth_image, None);
+            device.destroy_image_view(self.depth_image_view, None);
+            device.free_memory(self.depth_image_memory, None);
+        }
+    }
+    pub fn destroy_all(&mut self, device: &ash::Device) {
+        unsafe {
+
+            self.destroy_depth_image(device);
+            // Framebuffers, Commandbuffers, and CommandPool need cleanup
+            // Framebuffers need to be separated as they are removed when recreating swapchain
+            self.destroy_framebuffers(device);
+            self.free_command_buffers(device);
+            self.destroy_command_pools(device);
+            self.destroy_uniform_buffers(device);
+            self.destroy_texture(device);
+            self.destroy_descriptor_pool(device);
+        }
+    }
 }
 
 pub fn find_memory_type(

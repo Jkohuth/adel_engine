@@ -9,11 +9,12 @@ pub struct AshPipeline {
     descriptor_set_layout: vk::DescriptorSetLayout,
     graphics_pipeline: vk::Pipeline,
     pipeline_layout: vk::PipelineLayout,
+    depth_format: vk::Format,
 }
 
 impl AshPipeline {
-    pub fn new(device: &ash::Device, format: vk::Format, extent: vk::Extent2D) -> Self {
-        let render_pass = AshPipeline::create_render_pass(&device, format);
+    pub fn new(device: &ash::Device, surface_format: vk::Format, depth_format: vk::Format, extent: vk::Extent2D) -> Self {
+        let render_pass = AshPipeline::create_render_pass(&device, surface_format, depth_format);
         let descriptor_set_layout = AshPipeline::create_descriptor_set_layout(&device);
         let pipeline_layout = AshPipeline::create_pipeline_layout(&device, descriptor_set_layout);
         let graphics_pipeline = AshPipeline::create_graphics_pipeline(&device, render_pass.clone(), pipeline_layout, extent);
@@ -23,10 +24,11 @@ impl AshPipeline {
             descriptor_set_layout,
             graphics_pipeline,
             pipeline_layout,
+            depth_format
         }
     }
 
-    pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format) -> vk::RenderPass {
+    pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format, depth_format: vk::Format) -> vk::RenderPass {
         let color_attachment = vk::AttachmentDescription::builder()
             .format(surface_format)
             .flags(vk::AttachmentDescriptionFlags::empty())
@@ -38,42 +40,62 @@ impl AshPipeline {
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .build();
+        let depth_stencil_attachment = vk::AttachmentDescription::builder()
+            .format(depth_format)
+            .flags(vk::AttachmentDescriptionFlags::empty())
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .build();
 
 
-            let color_attachment_ref = vk::AttachmentReference::builder()
-                .attachment(0)
-                .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .build();
+        let color_attachment_ref = vk::AttachmentReference::builder()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
 
-            let subpasses = [vk::SubpassDescription::builder()
-                .color_attachments(&[color_attachment_ref])
-                .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-                .build()];
+        let depth_stencil_attachment_ref = vk::AttachmentReference::builder()
+            .attachment(1)
+            .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .build();
 
-                let render_pass_attachments = [color_attachment];
+        let subpasses = [vk::SubpassDescription::builder()
+            .color_attachments(&[color_attachment_ref])
+            .depth_stencil_attachment(&depth_stencil_attachment_ref)
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .build()];
 
-            let subpass_dependencies = [vk::SubpassDependency::builder()
-                .src_subpass(vk::SUBPASS_EXTERNAL)
-                .dst_subpass(0)
-                .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-                .src_access_mask(vk::AccessFlags::empty())
-                .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-                .dependency_flags(vk::DependencyFlags::empty())
-                .build()];
+        let render_pass_attachments = [color_attachment, depth_stencil_attachment];
+
+        let subpass_dependencies = [vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+            .dependency_flags(vk::DependencyFlags::empty())
+            .build()];
 
 
-            let renderpass_create_info = vk::RenderPassCreateInfo::builder()
-                .attachments(&render_pass_attachments)
-                .subpasses(&subpasses)
-                .dependencies(&subpass_dependencies)
-                .build();
+        let renderpass_create_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&render_pass_attachments)
+            .subpasses(&subpasses)
+            .dependencies(&subpass_dependencies)
+            .build();
 
-            unsafe {
-                device
-                    .create_render_pass(&renderpass_create_info, None)
-                    .expect("Failed to create render pass!")
-            }
+        unsafe {
+            device
+                .create_render_pass(&renderpass_create_info, None)
+                .expect("Failed to create render pass!")
+        }
 
     }
     fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLayout {
@@ -224,15 +246,15 @@ impl AshPipeline {
             .build();
 
         let depth_state_create_info = vk::PipelineDepthStencilStateCreateInfo::builder()
-            .depth_test_enable(false)
-            .depth_write_enable(false)
-            .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+            .depth_test_enable(true)
+            .depth_write_enable(true)
+            .depth_compare_op(vk::CompareOp::LESS)
             .depth_bounds_test_enable(false)
+            .min_depth_bounds(0.0)
+            .max_depth_bounds(1.0)
             .stencil_test_enable(false)
             .front(stencil_state)
             .back(stencil_state)
-            .max_depth_bounds(1.0)
-            .min_depth_bounds(0.0)
             .build();
 
         let color_blend_attachment_states = [vk::PipelineColorBlendAttachmentState::builder()
@@ -294,7 +316,7 @@ impl AshPipeline {
         graphics_pipelines[0]
     }
     pub fn recreate_render_pass(&mut self, device: &ash::Device, format: vk::Format) {
-        let render_pass = AshPipeline::create_render_pass(&device, format);
+        let render_pass = AshPipeline::create_render_pass(&device, format, self.depth_format);
         self.render_pass = render_pass;
     }
 
