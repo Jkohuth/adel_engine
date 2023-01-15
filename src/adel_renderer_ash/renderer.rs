@@ -6,6 +6,7 @@ use ash::vk;
 use log;
 use nalgebra::{Vector2, Vector3};
 use nalgebra;
+use tobj::Model;
 
 use crate::adel_ecs::{System, World};
 // TODO: Create a prelude and add these to it
@@ -16,6 +17,7 @@ use crate::adel_renderer_ash::utility::{
     pipeline::AshPipeline,
     buffers::AshBuffers,
     sync::SyncObjects,
+    model::*,
 };
 use super::definitions::{
     BufferComponent,
@@ -49,6 +51,7 @@ pub struct RendererAsh {
     sync_objects: SyncObjects,
     current_frame: usize,
     is_framebuffer_resized: bool,
+    descriptor_set: Option<Vec<vk::DescriptorSet>>,
 
     pub window: Rc<Window>,
 
@@ -80,6 +83,7 @@ impl RendererAsh {
             sync_objects,
             current_frame: 0,
             is_framebuffer_resized: false,
+            descriptor_set: None,
 
 
             window,
@@ -254,26 +258,28 @@ impl RendererAsh {
     }
     // TODO: Break up this function
     //pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData)>) {
-    pub fn draw_frame(&mut self, buffers: Vec<&BufferComponent>) {
+    //pub fn draw_frame(&mut self, buffers: Vec<&BufferComponent>) {
+    pub fn draw_frame(&mut self, models: Vec<&ModelComponent>) {
         // Begin_frame requires a return of Image_index, wait_fences and command_buffer
         let (wait_fences, image_index, command_buffer) = self.begin_frame();
         self.begin_swapchain_render_pass(image_index, &command_buffer);
-        self.buffers.update_uniform_buffer(&self.device, self.current_frame);
         // Render Objects
         //bind pipeline
         let device_size_offsets: [vk::DeviceSize; 1] = [0];
-        let descriptor_sets_to_bind = [self.buffers.descriptor_sets[self.current_frame]];
+        //let descriptor_sets = self.buffers.descriptor_sets.as_ref().unwrap();
         unsafe {
             self.device
                 .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
-            for buffer in buffers.iter() {
+            for model in models.iter() {
+                AshBuffers::update_uniform_buffer_new(&self.device, &model.uniform_buffers_memory, self.current_frame);
+                let descriptor_sets_to_bind = [model.descriptor_sets[self.current_frame]];
                 self.device
                     .cmd_bind_vertex_buffers(command_buffer,
                         0,
-                        &[buffer.vertex_buffer],
+                        &[model.vertex_buffer],
                         &device_size_offsets
                     );
-                self.device.cmd_bind_index_buffer(command_buffer, buffer.index_buffer, 0, vk::IndexType::UINT16);
+                self.device.cmd_bind_index_buffer(command_buffer, model.index_buffer, 0, vk::IndexType::UINT16);
                 self.device.cmd_bind_descriptor_sets(
                     command_buffer,
                     vk::PipelineBindPoint::GRAPHICS,
@@ -290,7 +296,7 @@ impl RendererAsh {
                 //        as_bytes(&buffer.1)
                 //    );
 
-                self.device.cmd_draw_indexed(command_buffer, buffer.indices_count, 1, 0, 0, 0);
+                self.device.cmd_draw_indexed(command_buffer, model.indices_count, 1, 0, 0, 0);
             }
         }
 
@@ -347,9 +353,18 @@ pub fn create_push_constant_data_tmp(tmp : Matrix4<f32>) -> PushConstantData {
 use crate::adel_ecs::RunStage;
 impl System for RendererAsh {
     fn startup(&mut self, world: &mut World) {
-        let mut buffer_component_vec: Vec<Option<BufferComponent>> = Vec::new();
+        let mut model_vec: Vec<Option<ModelComponent>> = Vec::new();
+        //let mut buffer_component_vec: Vec<Option<BufferComponent>> = Vec::new();
 
         {
+            let model_component_builder = world.borrow_component::<ModelComponentBuilder>().unwrap();
+            for mc in model_component_builder.iter() {
+                if let Some(component) = mc {
+                    model_vec.push(Some(component.build(&self.context, &self.device, &self.buffers, self.pipeline.descriptor_set_layout())));
+                }
+            }
+
+            /*
             let vertex_index = world.borrow_component::<VertexIndexComponent>().unwrap();
             for vi in vertex_index.iter() {
                 if let Some(component) = vi {
@@ -368,15 +383,26 @@ impl System for RendererAsh {
                     buffer_component_vec.push(None);
                 }
             }
+            */
         }
-        world.insert_component(buffer_component_vec);
+        //world.insert_component(buffer_component_vec);
+        world.insert_component(model_vec);
     }
     fn run(&mut self, world: &mut World) {
-        let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
-        let transform_component = world.borrow_component::<TransformComponent>().unwrap();
-        let camera = world.get_resource::<Camera>().unwrap();
+        //let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
+        let models = world.borrow_component::<ModelComponent>().unwrap();
+        //let transform_component = world.borrow_component::<TransformComponent>().unwrap();
+        //let camera = world.get_resource::<Camera>().unwrap();
         //let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData)> = Vec::new();
-        let mut buffers_push_constant: Vec<&BufferComponent> = Vec::new();
+        let mut model_vec: Vec<&ModelComponent> = Vec::new();
+        for i in models.iter().enumerate() {
+            if let Some(buffer) = i.1 {
+             //   if let Some(transform) = &transform_component[i.0] {
+                    model_vec.push(buffer);
+            //    }
+            }
+        }
+        /*let mut buffers_push_constant: Vec<&BufferComponent> = Vec::new();
         for i in option_buffers.iter().enumerate() {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &transform_component[i.0] {
@@ -384,8 +410,8 @@ impl System for RendererAsh {
                 }
             }
         }
-
-        self.draw_frame(buffers_push_constant);
+        */
+        self.draw_frame(model_vec);
     }
     // TODO: When Uniform buffers, Textures, and Models are abstracted to components, they need to be freed here
     fn shutdown(&mut self, world: &mut World) {
@@ -399,6 +425,13 @@ impl System for RendererAsh {
                         self.device.free_memory(buffer.vertex_buffer_memory, None);
                         self.device.destroy_buffer(buffer.index_buffer, None);
                         self.device.free_memory(buffer.index_buffer_memory, None);
+                    }
+                }
+            }
+            if let Some(mut models) = world.borrow_component_mut::<ModelComponent>() {
+                for model in models.iter_mut() {
+                    if let Some(i) = model {
+                        i.destroy_model_component(&self.device);
                     }
                 }
             }

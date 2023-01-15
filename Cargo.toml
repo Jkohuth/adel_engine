@@ -53,6 +53,10 @@ path = "bin/hello_world.rs"
 name = "texture"
 path = "bin/texture.rs"
 
+[[bin]]
+name = "model"
+path = "bin/model.rs"
+
 [[bench]]
 name = "vulkano_bench"
 path = "benches/vulkano_bench.rs"

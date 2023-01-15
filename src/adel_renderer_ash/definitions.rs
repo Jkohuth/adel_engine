@@ -1,4 +1,6 @@
 use ash::vk;
+use std::hash::{Hash, Hasher};
+
 use nalgebra::{
     Matrix2,
     Matrix3,
@@ -16,8 +18,8 @@ pub struct Vertex2d {
     pub position: nalgebra::Vector2::<f32>,
     pub color: nalgebra::Vector3::<f32>,
 }
-#[derive(Debug)]
 #[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct Vertex {
     pub position: nalgebra::Vector3::<f32>,
     pub color: nalgebra::Vector3::<f32>,
@@ -54,6 +56,26 @@ impl Vertex {
         [pos_attrib, color_attrib, tex_coord]
     }
 }
+impl PartialEq for Vertex {
+    fn eq(&self, other: &Self) -> bool {
+        self.position == other.position && self.color == other.color && self.tex_coord == other.tex_coord
+    }
+}
+
+impl Eq for Vertex {}
+
+impl Hash for Vertex {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.position[0].to_bits().hash(state);
+        self.position[1].to_bits().hash(state);
+        self.position[2].to_bits().hash(state);
+        self.color[0].to_bits().hash(state);
+        self.color[1].to_bits().hash(state);
+        self.color[2].to_bits().hash(state);
+        self.tex_coord[0].to_bits().hash(state);
+        self.tex_coord[1].to_bits().hash(state);
+    }
+}
 
 pub struct TriangleComponent {
     pub verticies: Vec<Vertex2d>
@@ -70,7 +92,7 @@ use ash::vk::{Buffer, DeviceMemory};
 // Bad name I know but this will go away soon
 pub struct VertexIndexComponent {
     pub vertices : Vec<Vertex>,
-    pub indices : Vec<u16>
+    pub indices : Vec<u32>
 }
 pub struct Vertex2dIndexComponent {
     pub vertices : Vec<Vertex2d>,

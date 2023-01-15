@@ -15,16 +15,12 @@ pub struct AshBuffers {
     transient_command_pool: vk::CommandPool,
     pub command_buffers: Vec<vk::CommandBuffer>,
     pub descriptor_pool: vk::DescriptorPool,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub descriptor_sets: Option<Vec<vk::DescriptorSet>>,
     graphics_transient_queue: vk::Queue,
 
     // Temporary
     uniform_buffers: Vec<vk::Buffer>,
     uniform_buffers_memory: Vec<vk::DeviceMemory>,
-    texture_image: vk::Image,
-    texture_image_memory: vk::DeviceMemory,
-    texture_image_view: vk::ImageView,
-    texture_sample: vk::Sampler,
 
     depth_image: vk::Image,
     depth_image_memory: vk::DeviceMemory,
@@ -48,25 +44,18 @@ impl AshBuffers {
         let (uniform_buffers, uniform_buffers_memory) = AshBuffers::create_uniform_buffers(&context, &device);
         let descriptor_pool = AshBuffers::create_descriptor_pool(&device);
         let command_buffers = AshBuffers::create_command_buffers(&device, command_pool);
-        let (texture_image, texture_image_memory) = AshBuffers::create_texture_image(context, device, swapchain.graphics_queue.clone(), Path::new("blueeyes.png"), &command_pool);
-        let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image, vk::Format::R8G8B8A8_SRGB);
-        let texture_sample = AshBuffers::create_texture_sample(device);
-        let descriptor_sets = AshBuffers::create_descriptor_sets(
-            &device, descriptor_pool, pipeline.descriptor_set_layout(), &uniform_buffers, texture_image_view, texture_sample);
+        //let descriptor_sets = AshBuffers::create_descriptor_sets(
+        //    &device, descriptor_pool, pipeline.descriptor_set_layout(), &uniform_buffers, texture_image_view, texture_sample);
         Self {
             framebuffers,
             command_pool,
             transient_command_pool,
             command_buffers,
             descriptor_pool,
-            descriptor_sets,
+            descriptor_sets: None,
             graphics_transient_queue,
             uniform_buffers,
             uniform_buffers_memory,
-            texture_image,
-            texture_image_memory,
-            texture_image_view,
-            texture_sample,
             depth_image,
             depth_image_memory,
             depth_image_view,
@@ -211,6 +200,11 @@ impl AshBuffers {
         }
         descriptor_sets
     }
+    pub fn create_descriptor_sets_self(&self, device: &ash::Device, descriptor_set_layout: vk::DescriptorSetLayout, texture_image_view: vk::ImageView, texture_sampler: vk::Sampler)
+        -> Vec<vk::DescriptorSet>
+    {
+        AshBuffers::create_descriptor_sets(device, self.descriptor_pool, descriptor_set_layout, &self.uniform_buffers, texture_image_view, texture_sampler)
+    }
     pub fn recreate_framebuffers(&mut self, device: &ash::Device, render_pass: vk::RenderPass, image_views: &Vec<vk::ImageView>, depth_image_view: vk::ImageView, extent: vk::Extent2D) {
         let framebuffers = AshBuffers::create_framebuffers(
             device,
@@ -353,8 +347,8 @@ impl AshBuffers {
         (uniform_buffers, uniform_buffers_memory)
 
     }
-    pub fn create_index_buffer(&self, context: &AshContext, device: &ash::Device, indicies: &Vec<u16>) -> (vk::Buffer, vk::DeviceMemory) {
-        let buffer_size = (indicies.len() * std::mem::size_of::<u16>()) as vk::DeviceSize;
+    pub fn create_index_buffer(&self, context: &AshContext, device: &ash::Device, indicies: &Vec<u32>) -> (vk::Buffer, vk::DeviceMemory) {
+        let buffer_size = (indicies.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
         //log::info!("JAKOB buffer 1 {:?} buffer 2 {:?}", buffer_size, buffer_size2);
         let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
             vk::BufferUsageFlags::TRANSFER_SRC, vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT);
@@ -367,7 +361,7 @@ impl AshBuffers {
                     buffer_size,
                     vk::MemoryMapFlags::empty(),
                 )
-                .expect("Failed to Map Memory") as *mut u16;
+                .expect("Failed to Map Memory") as *mut u32;
 
             data_ptr.copy_from_nonoverlapping(indicies.as_ptr(), indicies.len());
 
@@ -384,6 +378,78 @@ impl AshBuffers {
 
         (index_buffer, index_buffer_memory)
     }
+
+    pub fn create_texture_image(&self, context: &AshContext, device: &ash::Device, image_width: u32, image_height: u32, image_size: vk::DeviceSize, image_data: image::RgbaImage)
+        -> (vk::Image, vk::DeviceMemory)
+    {
+        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(
+            context,
+            device,
+            image_size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+        );
+        let image_data = image_data.into_raw();
+        unsafe {
+            let data_ptr = device
+                .map_memory(
+                    staging_buffer_memory,
+                    0,
+                    image_size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .expect("Failed to Map Memory") as *mut u8;
+
+            data_ptr.copy_from_nonoverlapping(image_data.as_ptr(), image_size as usize);
+
+            device.unmap_memory(staging_buffer_memory);
+        }
+        let (texture_image, texture_image_memory) = AshBuffers::create_image(
+            context,
+            device,
+            image_width,
+            image_height,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL
+        );
+
+        AshBuffers::transition_image_layout(
+            device,
+            texture_image,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            &self.command_pool,
+            self.graphics_transient_queue
+        );
+        AshBuffers::copy_buffer_to_image(
+            device,
+            staging_buffer,
+            texture_image,
+            image_width,
+            image_height,
+            &self.command_pool,
+            self.graphics_transient_queue
+        );
+        AshBuffers::transition_image_layout(
+            device,
+            texture_image,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            &self.command_pool,
+            self.graphics_transient_queue,
+        );
+        unsafe {
+            device.destroy_buffer(staging_buffer, None);
+            device.free_memory(staging_buffer_memory, None);
+        }
+        (texture_image, texture_image_memory)
+
+    }
+
     pub fn update_uniform_buffer(&self, device: &ash::Device, current_image: usize) {
         let ubos = [UniformBufferObject {
             model: nalgebra::Matrix4::<f32>::identity(),
@@ -410,7 +476,34 @@ impl AshBuffers {
                 .unmap_memory(self.uniform_buffers_memory[current_image]);
         }
     }
-    pub fn create_texture_image(context: &AshContext, device: &ash::Device, submit_queue: vk::Queue, image_path: &Path, command_pool: &vk::CommandPool)
+    pub fn update_uniform_buffer_new(device: &ash::Device, uniform_buffers_memory: &Vec<vk::DeviceMemory>, current_image: usize) {
+        let ubos = [UniformBufferObject {
+            model: nalgebra::Matrix4::<f32>::identity(),
+            view: nalgebra::Matrix4::<f32>::identity(),
+            proj: nalgebra::Matrix4::<f32>::identity(),
+        }];
+
+        let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
+
+        unsafe {
+            let data_ptr =
+                device
+                    .map_memory(
+                        uniform_buffers_memory[current_image],
+                        0,
+                        buffer_size,
+                        vk::MemoryMapFlags::empty(),
+                    )
+                    .expect("Failed to Map Memory") as *mut UniformBufferObject;
+
+            data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
+
+            device
+                .unmap_memory(uniform_buffers_memory[current_image]);
+        }
+
+    }
+    pub fn create_texture_image_bak(context: &AshContext, device: &ash::Device, submit_queue: vk::Queue, image_path: &Path, command_pool: &vk::CommandPool)
         -> (vk::Image, vk::DeviceMemory)
     {
         let mut image_object: DynamicImage = image::open(image_path).unwrap();
@@ -489,7 +582,7 @@ impl AshBuffers {
         (texture_image, texture_image_memory)
 
     }
-    fn create_texture_image_view(device: &ash::Device, image: vk::Image, format: vk::Format) -> vk::ImageView {
+    pub fn create_texture_image_view(device: &ash::Device, image: vk::Image) -> vk::ImageView {
         AshSwapchain::create_image_view(device, image, vk::Format::R8G8B8A8_SRGB, vk::ImageAspectFlags::COLOR, 1)
     }
     fn create_image(
@@ -660,7 +753,7 @@ impl AshBuffers {
         }
         AshBuffers::end_single_time_commands(device, command_buffer, command_pool, submit_queue);
     }
-    fn create_texture_sample(device: &ash::Device) -> vk::Sampler {
+    pub fn create_texture_sample(device: &ash::Device) -> vk::Sampler {
         let sampler_info = vk::SamplerCreateInfo::builder()
             .mag_filter(vk::Filter::LINEAR)
             .min_filter(vk::Filter::LINEAR)
@@ -726,14 +819,14 @@ impl AshBuffers {
             device.destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
-    pub fn destroy_texture(&mut self, device: &ash::Device) {
+    /*pub fn destroy_texture(&mut self, device: &ash::Device) {
         unsafe {
             device.destroy_image(self.texture_image, None);
             device.destroy_image_view(self.texture_image_view, None);
             device.free_memory(self.texture_image_memory, None);
             device.destroy_sampler(self.texture_sample, None);
         }
-    }
+    }*/
     pub fn create_depth_image(context: &AshContext, device: &ash::Device, extent: vk::Extent2D, command_pool: &vk::CommandPool, submit_queue: vk::Queue)
         -> (vk::Image, vk::DeviceMemory, vk::ImageView)
     {
@@ -798,7 +891,7 @@ impl AshBuffers {
             self.free_command_buffers(device);
             self.destroy_command_pools(device);
             self.destroy_uniform_buffers(device);
-            self.destroy_texture(device);
+            //self.destroy_texture(device);
             self.destroy_descriptor_pool(device);
         }
     }
