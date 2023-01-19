@@ -11,23 +11,78 @@ use nalgebra::{
     Translation3,
     Vector2, Vector3, Vector4,};
 
-use nalgebra;
 #[derive(Debug)]
 #[repr(C)]
 pub struct Vertex2d {
     pub position: nalgebra::Vector2::<f32>,
     pub color: nalgebra::Vector3::<f32>,
 }
+
+// Note: To use the builder class properly these can be the default vector values and not option
+pub struct VertexBuilder {
+    position: Option<Vector3::<f32>>,
+    color: Option<Vector3::<f32>>,
+    normal: Option<Vector3::<f32>>,
+    uv: Option<Vector2::<f32>>,
+}
+
+impl VertexBuilder {
+    pub fn new() -> Self {
+        VertexBuilder {
+            position: None,
+            color: None,
+            normal: None,
+            uv: None,
+        }
+    }
+    pub fn build(&self) -> Vertex {
+        Vertex {
+            position: self.position.unwrap_or_default(),
+            color: self.color.unwrap_or_default(),
+            //normal: self.normal.unwrap_or_default(),
+            uv: self.uv.unwrap_or_default()
+        }
+    }
+    pub fn position(mut self, position: Vector3::<f32>) -> Self{
+        self.position = Some(position);
+        self
+    }
+    pub fn color(mut self, color: Vector3::<f32>) -> Self{
+        self.color = Some(color);
+        self
+    }
+    pub fn normal(mut self, normal: Vector3::<f32>) -> Self {
+        self.normal = Some(normal);
+        self
+    }
+    pub fn uv(mut self, uv: Vector2::<f32>) -> Self {
+        self.uv = Some(uv);
+        self
+    }
+}
+impl Default for VertexBuilder {
+    fn default() -> Self {
+        VertexBuilder {
+            position: None,
+            color: None,
+            normal: None,
+            uv: None,
+        }
+    }
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Vertex {
-    pub position: nalgebra::Vector3::<f32>,
-    pub color: nalgebra::Vector3::<f32>,
-    //pub normal: nalgebra::Vector3::<f32>,
-    //pub tex_coord: nalgebra::Vector2::<f32>
+    pub position: Vector3::<f32>,
+    pub color: Vector3::<f32>,
+    //pub normal: Vector3::<f32>,
+    pub uv: Vector2::<f32>
 }
 
 impl Vertex {
+    pub fn builder() -> VertexBuilder {
+        VertexBuilder::default()
+    }
     pub fn binding_descriptions() -> [vk::VertexInputBindingDescription; 1] {
         [vk::VertexInputBindingDescription::builder()
             .binding(0)
@@ -35,7 +90,7 @@ impl Vertex {
             .input_rate(vk::VertexInputRate::VERTEX)
             .build()]
     }
-    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
+    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
         let pos_attrib = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(0)
@@ -48,18 +103,32 @@ impl Vertex {
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset(std::mem::size_of::<nalgebra::Vector3<f32>>() as u32)
             .build();
-        //let tex_coord = vk::VertexInputAttributeDescription::builder()
+        /*let normal_attrib = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(2)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset((std::mem::size_of::<nalgebra::Vector3::<f32>>() + std::mem::size_of::<nalgebra::Vector3::<f32>>()) as u32)
+            .build();*/
+        //let uv_attrib = vk::VertexInputAttributeDescription::builder()
         //    .binding(0)
-        //    .location(2)
+        //    .location(3)
         //    .format(vk::Format::R32G32_SFLOAT)
-        //    .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>()) as u32)
+        //    .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3::<f32>>()) as u32)
         //    .build();
-        [pos_attrib, color_attrib] //, tex_coord]
+        let uv_attrib = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(2)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>()) as u32)
+            .build();
+        //[pos_attrib, color_attrib, normal_attrib, uv_coord]
+        [pos_attrib, color_attrib, uv_attrib]
     }
 }
 impl PartialEq for Vertex {
     fn eq(&self, other: &Self) -> bool {
-        self.position == other.position && self.color == other.color //&& self.tex_coord == other.tex_coord
+        //self.position == other.position && self.color == other.color && self.normal == other.normal && self.uv == other.uv
+        self.position == other.position && self.color == other.color && self.uv == other.uv
     }
 }
 
@@ -73,8 +142,11 @@ impl Hash for Vertex {
         self.color[0].to_bits().hash(state);
         self.color[1].to_bits().hash(state);
         self.color[2].to_bits().hash(state);
-        //self.tex_coord[0].to_bits().hash(state);
-        //self.tex_coord[1].to_bits().hash(state);
+        //self.normal[0].to_bits().hash(state);
+        //self.normal[1].to_bits().hash(state);
+        //self.normal[2].to_bits().hash(state);
+        self.uv[0].to_bits().hash(state);
+        self.uv[1].to_bits().hash(state);
     }
 }
 

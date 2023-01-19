@@ -10,7 +10,8 @@ fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
     let mut world = World::new();
     let mut model_build = ModelComponentBuilder::new();
-    model_build.load_model(Path::new("resources/colored_cube.obj"));
+    model_build.load_model(Path::new("resources/viking_room.obj"));
+    model_build.load_texture(Path::new("resources/viking_room.png"));
     let camera_transform = TransformComponent::default();
     let mut cube_transform = TransformComponent::default();
     cube_transform.translation.z += 5.0;

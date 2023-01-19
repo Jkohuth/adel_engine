@@ -148,7 +148,7 @@ impl AshBuffers {
         }
     }
 
-    pub fn create_descriptor_sets(
+    pub fn create_descriptor_sets_bak(
         device: &ash::Device,
         descriptor_pool: vk::DescriptorPool,
         descriptor_set_layout: vk::DescriptorSetLayout,
@@ -187,7 +187,7 @@ impl AshBuffers {
         }
         descriptor_sets
     }
-    pub fn create_descriptor_sets_texture(
+    pub fn create_descriptor_sets(
         device: &ash::Device,
         descriptor_pool: vk::DescriptorPool,
         descriptor_set_layout: vk::DescriptorSetLayout,
@@ -243,7 +243,7 @@ impl AshBuffers {
     pub fn create_descriptor_sets_self(&self, device: &ash::Device, descriptor_set_layout: vk::DescriptorSetLayout, texture_image_view: vk::ImageView, texture_sampler: vk::Sampler)
         -> Vec<vk::DescriptorSet>
     {
-        AshBuffers::create_descriptor_sets(device, self.descriptor_pool, descriptor_set_layout, &self.uniform_buffers) //, texture_image_view, texture_sampler)
+        AshBuffers::create_descriptor_sets(device, self.descriptor_pool, descriptor_set_layout, &self.uniform_buffers, texture_image_view, texture_sampler)
     }
     pub fn recreate_framebuffers(&mut self, device: &ash::Device, render_pass: vk::RenderPass, image_views: &Vec<vk::ImageView>, depth_image_view: vk::ImageView, extent: vk::Extent2D) {
         let framebuffers = AshBuffers::create_framebuffers(

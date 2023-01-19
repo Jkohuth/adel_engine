@@ -19,10 +19,10 @@ pub struct ModelComponent {
     pub uniform_buffers: Vec<vk::Buffer>,
     pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
-    //pub texture_image: vk::Image,
-    //pub texture_image_memory: vk::DeviceMemory,
-    //pub texture_image_view: vk::ImageView,
-    //pub texture_sampler: vk::Sampler,
+    pub texture_image: vk::Image,
+    pub texture_image_memory: vk::DeviceMemory,
+    pub texture_image_view: vk::ImageView,
+    pub texture_sampler: vk::Sampler,
 }
 
 impl ModelComponent {
@@ -32,10 +32,10 @@ impl ModelComponent {
             device.free_memory(self.vertex_buffer_memory, None);
             device.destroy_buffer(self.index_buffer, None);
             device.free_memory(self.index_buffer_memory, None);
-            //device.destroy_image(self.texture_image, None);
-            //device.free_memory(self.texture_image_memory, None);
-            //device.destroy_image_view(self.texture_image_view, None);
-            //device.destroy_sampler(self.texture_sampler, None);
+            device.destroy_image(self.texture_image, None);
+            device.free_memory(self.texture_image_memory, None);
+            device.destroy_image_view(self.texture_image_view, None);
+            device.destroy_sampler(self.texture_sampler, None);
 
             for i in self.uniform_buffers.iter().enumerate() {
                 device.destroy_buffer(self.uniform_buffers[i.0], None);
@@ -56,6 +56,7 @@ pub struct ModelComponentBuilder {
     image_height: u32,
 }
 
+// FIXME: Setup the builder class properly
 impl ModelComponentBuilder {
     pub fn new() -> Self {
         Self {
@@ -85,28 +86,28 @@ impl ModelComponentBuilder {
 
         let mut unique_vertices = HashMap::new();
         for model in &models {
-            log::info!("Model {:?}", &model);
             for index in &model.mesh.indices {
-                log::info!("Index {:?}", index);
                 let pos_offset = (3 * index) as usize;
                 let color_offset = (3 * index) as usize;
-                let tex_coord_offset = (2 * index) as usize;
-                let vertex: Vertex = Vertex {
-                    position: Vector3::new(
+                let uv_offset = (2 * index) as usize;
+
+                let mut vertex_builder = Vertex::builder()
+                    .position(Vector3::new(
                         model.mesh.positions[pos_offset],
                         model.mesh.positions[pos_offset+1],
-                        model.mesh.positions[pos_offset+2]
-                    ),
-                    color: Vector3::new(
+                        model.mesh.positions[pos_offset+2]))
+                    .uv(Vector2::new(
+                        model.mesh.texcoords[uv_offset],
+                        1.0 - model.mesh.texcoords[uv_offset +1]));
+
+                // Confirm if Vertex Colors were supplied for this Model, if not builder will set them to default
+                if model.mesh.vertex_color.len() > 0 {
+                    vertex_builder = vertex_builder.color(Vector3::new(
                         model.mesh.vertex_color[color_offset + 0],
                         model.mesh.vertex_color[color_offset + 1],
-                        model.mesh.vertex_color[color_offset + 2]),
-                    //tex_coord: Vector2::new(
-                    //    model.mesh.texcoords[tex_coord_offset],
-                    //    1.0 - model.mesh.texcoords[tex_coord_offset +1]
-                    //)
-                };
-                log::info!("Model Vertex \n{:?}", &vertex);
+                        model.mesh.vertex_color[color_offset + 2]));                }
+                let vertex = vertex_builder.build();
+
                 if let Some(index) = unique_vertices.get(&vertex) {
                     indices.push(*index as u32);
                 } else {
@@ -124,7 +125,7 @@ impl ModelComponentBuilder {
     pub fn load_texture(&mut self, image_path: &Path) {
 
         let mut image_object: DynamicImage = image::open(image_path).unwrap();
-        //image_object = image_object.flipv();
+        image_object = image_object.flipv();
         let (image_width, image_height) = (image_object.width(), image_object.height());
         // Size is u8 - per color size, 4 - rgba, width*height - area
         let image_size =
@@ -141,23 +142,23 @@ impl ModelComponentBuilder {
     pub fn build(&self, context: &AshContext, device: &ash::Device, buffers: &AshBuffers, descriptor_set_layout: vk::DescriptorSetLayout) -> ModelComponent {
         let (vertex_buffer, vertex_buffer_memory) = buffers.create_vertex_buffer(context, device, self.vertices.as_ref().unwrap());
         let (index_buffer, index_buffer_memory) = buffers.create_index_buffer(context, device, self.indices.as_ref().unwrap());
-        //let (texture_image, texture_image_memory) = buffers.create_texture_image(context, device, self.image_width, self.image_height, self.image_size, self.image_rgba.clone().unwrap());
-        //let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image);
-        //let texture_sampler = AshBuffers::create_texture_sample(device);
+        let (texture_image, texture_image_memory) = buffers.create_texture_image(context, device, self.image_width, self.image_height, self.image_size, self.image_rgba.clone().unwrap());
+        let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image);
+        let texture_sampler = AshBuffers::create_texture_sample(device);
 
         let (uniform_buffers, uniform_buffers_memory) = AshBuffers::create_uniform_buffers(context, device);
-        //let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout, &uniform_buffers, texture_image_view, texture_sampler);
-        let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout, &uniform_buffers);
+        let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout, &uniform_buffers, texture_image_view, texture_sampler);
+        //let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout, &uniform_buffers);
         ModelComponent {
             vertex_buffer,
             vertex_buffer_memory,
             index_buffer,
             index_buffer_memory,
             indices_count: self.indices.as_ref().unwrap().len() as u32,
-            //texture_image,
-            //texture_image_memory,
-            //texture_image_view,
-            //texture_sampler,
+            texture_image,
+            texture_image_memory,
+            texture_image_view,
+            texture_sampler,
             uniform_buffers,
             uniform_buffers_memory,
             descriptor_sets
