@@ -87,6 +87,7 @@ impl ModelComponentBuilder {
         for model in &models {
             log::info!("Model {:?}", &model);
             for index in &model.mesh.indices {
+                log::info!("Index {:?}", index);
                 let pos_offset = (3 * index) as usize;
                 let color_offset = (3 * index) as usize;
                 let tex_coord_offset = (2 * index) as usize;

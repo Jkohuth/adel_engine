@@ -727,24 +727,24 @@ pub fn update_uniform_buffer_new(device: &ash::Device, uniform_buffers_memory: &
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) {
-        /* TODO: Causing Errors on recreation, not in mood to debug now 2-1-23 22:02 JK
-        let aspect_mask = if new_layout == vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
-            match format {
-                vk::Format::D32_SFLOAT_S8_UINT | vk::Format::D24_UNORM_S8_UINT =>
-                    vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL,
-                _ => vk::ImageAspectFlags::COLOR
-            }
-        } else {
-            vk::ImageAspectFlags::COLOR
-        };*/
+        let aspect_mask =
+            if new_layout == vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+                match format {
+                    vk::Format::D32_SFLOAT_S8_UINT | vk::Format::D24_UNORM_S8_UINT =>
+                        vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL,
+                    _ => vk::ImageAspectFlags::DEPTH
+                }
+            } else {
+                vk::ImageAspectFlags::COLOR
+            };
         let (src_access_mask, dst_access_mask, src_stage_mask, dst_stage_mask) =
         match (old_layout, new_layout) {
-            //(vk::ImageLayout::UNDEFINED, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL) => (
-            //    vk::AccessFlags::empty(),
-            //    vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-            //    vk::PipelineStageFlags::TOP_OF_PIPE,
-            //    vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
-            //),
+            (vk::ImageLayout::UNDEFINED, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL) => (
+                vk::AccessFlags::empty(),
+                vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+            ),
             (vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => (
                 vk::AccessFlags::empty(),
                 vk::AccessFlags::TRANSFER_WRITE,
@@ -762,8 +762,8 @@ pub fn update_uniform_buffer_new(device: &ash::Device, uniform_buffers_memory: &
 
         let command_buffer = AshBuffers::begin_single_time_commands(device, command_pool);
         let subresource = vk::ImageSubresourceRange::builder()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            //.aspect_mask(aspect_mask)
+            //.aspect_mask(vk::ImageAspectFlags::COLOR)
+            .aspect_mask(aspect_mask)
             .base_mip_level(0)
             .level_count(1)
             .base_array_layer(0)
@@ -883,7 +883,7 @@ pub fn update_uniform_buffer_new(device: &ash::Device, uniform_buffers_memory: &
         );
         let depth_image_view = AshSwapchain::create_image_view(device, depth_image, format, vk::ImageAspectFlags::DEPTH, 1);
 
-        /*AshBuffers::transition_image_layout(
+        AshBuffers::transition_image_layout(
             device,
             depth_image,
             format,
@@ -891,7 +891,7 @@ pub fn update_uniform_buffer_new(device: &ash::Device, uniform_buffers_memory: &
             vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             command_pool,
             submit_queue
-        );*/
+        );
 
         (depth_image, depth_image_memory, depth_image_view)
     }
