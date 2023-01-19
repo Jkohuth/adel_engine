@@ -23,7 +23,8 @@ pub struct Vertex2d {
 pub struct Vertex {
     pub position: nalgebra::Vector3::<f32>,
     pub color: nalgebra::Vector3::<f32>,
-    pub tex_coord: nalgebra::Vector2::<f32>
+    //pub normal: nalgebra::Vector3::<f32>,
+    //pub tex_coord: nalgebra::Vector2::<f32>
 }
 
 impl Vertex {
@@ -34,11 +35,11 @@ impl Vertex {
             .input_rate(vk::VertexInputRate::VERTEX)
             .build()]
     }
-    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
+    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
         let pos_attrib = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(0)
-            .format(vk::Format::R32G32_SFLOAT)
+            .format(vk::Format::R32G32B32_SFLOAT)
             .offset(0)
             .build();
         let color_attrib = vk::VertexInputAttributeDescription::builder()
@@ -47,18 +48,18 @@ impl Vertex {
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset(std::mem::size_of::<nalgebra::Vector3<f32>>() as u32)
             .build();
-        let tex_coord = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(2)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>()) as u32)
-            .build();
-        [pos_attrib, color_attrib, tex_coord]
+        //let tex_coord = vk::VertexInputAttributeDescription::builder()
+        //    .binding(0)
+        //    .location(2)
+        //    .format(vk::Format::R32G32_SFLOAT)
+        //    .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>()) as u32)
+        //    .build();
+        [pos_attrib, color_attrib] //, tex_coord]
     }
 }
 impl PartialEq for Vertex {
     fn eq(&self, other: &Self) -> bool {
-        self.position == other.position && self.color == other.color && self.tex_coord == other.tex_coord
+        self.position == other.position && self.color == other.color //&& self.tex_coord == other.tex_coord
     }
 }
 
@@ -72,8 +73,8 @@ impl Hash for Vertex {
         self.color[0].to_bits().hash(state);
         self.color[1].to_bits().hash(state);
         self.color[2].to_bits().hash(state);
-        self.tex_coord[0].to_bits().hash(state);
-        self.tex_coord[1].to_bits().hash(state);
+        //self.tex_coord[0].to_bits().hash(state);
+        //self.tex_coord[1].to_bits().hash(state);
     }
 }
 
@@ -182,9 +183,9 @@ impl TransformComponent {
                 self.scale.z * (c1 * c2),                // 22
                 0.0),                                    // 32
             Vector4::<f32>::new(
-                self.translation.x,                      // 03
-                self.translation.y,                      // 13
-                self.translation.z,                      // 23
+                self.translation.x,                         // 03
+                self.translation.y,                         // 13
+                self.translation.z,                         // 23
                 1.0)                                     // 33
             ])
     }

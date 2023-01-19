@@ -34,7 +34,7 @@ impl KeyboardHandler {
 
 impl System for KeyboardHandler {
     fn startup(&mut self, world: &mut World) {
-        /* Used for Cameras, may add it in later
+        /* Window object should be a world resource so it can be gotten anywhere
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
         for i in input_ref.iter().enumerate() {
@@ -43,8 +43,9 @@ impl System for KeyboardHandler {
                 if let Some(camera_transform) = &mut transform_ref[i.0] {
                     //log::info!("Post move camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
                     let mut camera = world.get_resource_mut::<Camera>().unwrap();
-                    //camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
-                    camera.set_orthographic_projection(-1.0, 1.0, 1.0, -1.0, -1.0, 10.0);
+                    camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
+                    camera.set_perspective_projection(fovy, aspect, near, far)
+                    //camera.set_orthographic_projection(-1.0, 1.0, 1.0, -1.0, -1.0, 10.0);
                 }
             }
         } */
@@ -64,19 +65,17 @@ impl System for KeyboardHandler {
         for i in input_ref.iter().enumerate() {
             // _input_entity is used to track that this entity at this position in the Component Array exists
             if let Some(_input_entity) = i.1 {
-                if let Some(transform) = &mut transform_ref[i.0] {
+                if let Some(camera_transform) = &mut transform_ref[i.0] {
 
-                    move_2d_object(&input_consumer.pressed, world.get_dt(), transform);
+                    //move_2d_object(&input_consumer.pressed, world.get_dt(), transform);
                     //camera.set_orthographic_projection_pos(1.0, 1.0, 10.0);
-                    //log::info!("Camera Info Position: {:?}\nProjection: {:?}", camera.position, camera.get_projection());
+                    //log::info!("Camera Info Position: {:?}\nProjection: {:?}", camera_transform, camera.get_projection());
                     //log::info!("Input consumed Tranform {:?}", &transform);
-                    /* Camera Code will be back eventually -JAKOB 12-2022
                     //log::info!("Inside the move script camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
                     move_in_plane_xz(&input_consumer.pressed, world.get_dt(), camera_transform);
                     //log::info!("Post move camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
-                    let mut camera = world.get_resource_mut::<Camera>().unwrap();
                     camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
-                    */
+
                 }
             }
         }

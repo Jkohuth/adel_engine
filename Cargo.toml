@@ -49,9 +49,9 @@ path = "bin/hello_world.rs"
 #name = "movement"
 #path = "bin/movement.rs"
 
-[[bin]]
-name = "texture"
-path = "bin/texture.rs"
+#[[bin]]
+#name = "texture"
+#path = "bin/texture.rs"
 
 [[bin]]
 name = "model"

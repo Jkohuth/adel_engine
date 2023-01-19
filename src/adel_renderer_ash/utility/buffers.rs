@@ -147,7 +147,47 @@ impl AshBuffers {
             .expect("Failed to create descriptor pool")
         }
     }
+
     pub fn create_descriptor_sets(
+        device: &ash::Device,
+        descriptor_pool: vk::DescriptorPool,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        uniform_buffers: &Vec<vk::Buffer>,
+    ) -> Vec<vk::DescriptorSet> {
+        let mut layouts: Vec<vk::DescriptorSetLayout> = vec![descriptor_set_layout; MAX_FRAMES_IN_FLIGHT];
+
+        let descriptor_set_allocate_info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(&layouts)
+            .build();
+
+        let descriptor_sets = unsafe {
+            device
+                .allocate_descriptor_sets(&descriptor_set_allocate_info)
+                .expect("Failed to create DescriptorSets")
+        };
+        for (i, &descriptor_set) in descriptor_sets.iter().enumerate() {
+            let descriptor_buffer_info = [vk::DescriptorBufferInfo::builder()
+                .buffer(uniform_buffers[i])
+                .range(std::mem::size_of::<UniformBufferObject>() as u64)
+                .offset(0)
+                .build()];
+            let ubo_write = vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_set)
+                .dst_array_element(0)
+                .dst_binding(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(&descriptor_buffer_info)
+                .build();
+            let descriptor_write_sets = [ubo_write];
+            unsafe {
+                device.update_descriptor_sets(&descriptor_write_sets, &[]);
+            }
+
+        }
+        descriptor_sets
+    }
+    pub fn create_descriptor_sets_texture(
         device: &ash::Device,
         descriptor_pool: vk::DescriptorPool,
         descriptor_set_layout: vk::DescriptorSetLayout,
@@ -203,7 +243,7 @@ impl AshBuffers {
     pub fn create_descriptor_sets_self(&self, device: &ash::Device, descriptor_set_layout: vk::DescriptorSetLayout, texture_image_view: vk::ImageView, texture_sampler: vk::Sampler)
         -> Vec<vk::DescriptorSet>
     {
-        AshBuffers::create_descriptor_sets(device, self.descriptor_pool, descriptor_set_layout, &self.uniform_buffers, texture_image_view, texture_sampler)
+        AshBuffers::create_descriptor_sets(device, self.descriptor_pool, descriptor_set_layout, &self.uniform_buffers) //, texture_image_view, texture_sampler)
     }
     pub fn recreate_framebuffers(&mut self, device: &ash::Device, render_pass: vk::RenderPass, image_views: &Vec<vk::ImageView>, depth_image_view: vk::ImageView, extent: vk::Extent2D) {
         let framebuffers = AshBuffers::create_framebuffers(
@@ -450,11 +490,11 @@ impl AshBuffers {
 
     }
 
-    pub fn update_uniform_buffer(&self, device: &ash::Device, current_image: usize) {
+    pub fn update_uniform_buffer(&self, device: &ash::Device, current_image: usize, proj: nalgebra::Matrix4::<f32>) {
         let ubos = [UniformBufferObject {
             model: nalgebra::Matrix4::<f32>::identity(),
             view: nalgebra::Matrix4::<f32>::identity(),
-            proj: nalgebra::Matrix4::<f32>::identity(),
+            proj
         }];
 
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
@@ -476,13 +516,12 @@ impl AshBuffers {
                 .unmap_memory(self.uniform_buffers_memory[current_image]);
         }
     }
-    pub fn update_uniform_buffer_new(device: &ash::Device, uniform_buffers_memory: &Vec<vk::DeviceMemory>, current_image: usize) {
+pub fn update_uniform_buffer_new(device: &ash::Device, uniform_buffers_memory: &Vec<vk::DeviceMemory>, current_image: usize, model: nalgebra::Matrix4::<f32>, proj: nalgebra::Matrix4::<f32>, view: nalgebra::Matrix4::<f32>) {
         let ubos = [UniformBufferObject {
-            model: nalgebra::Matrix4::<f32>::identity(),
-            view: nalgebra::Matrix4::<f32>::identity(),
-            proj: nalgebra::Matrix4::<f32>::identity(),
+            model,
+            view,
+            proj,
         }];
-
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
 
         unsafe {

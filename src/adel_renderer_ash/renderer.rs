@@ -259,7 +259,7 @@ impl RendererAsh {
     // TODO: Break up this function
     //pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData)>) {
     //pub fn draw_frame(&mut self, buffers: Vec<&BufferComponent>) {
-    pub fn draw_frame(&mut self, models: Vec<&ModelComponent>) {
+    pub fn draw_frame(&mut self, models: Vec<&ModelComponent>, model_matrix: nalgebra::Matrix4::<f32>, proj: nalgebra::Matrix4::<f32>, view: nalgebra::Matrix4::<f32>) {
         // Begin_frame requires a return of Image_index, wait_fences and command_buffer
         let (wait_fences, image_index, command_buffer) = self.begin_frame();
         self.begin_swapchain_render_pass(image_index, &command_buffer);
@@ -271,7 +271,7 @@ impl RendererAsh {
             self.device
                 .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
             for model in models.iter() {
-                AshBuffers::update_uniform_buffer_new(&self.device, &model.uniform_buffers_memory, self.current_frame);
+                AshBuffers::update_uniform_buffer_new(&self.device, &model.uniform_buffers_memory, self.current_frame, model_matrix, proj, view);
                 let descriptor_sets_to_bind = [model.descriptor_sets[self.current_frame]];
                 self.device
                     .cmd_bind_vertex_buffers(command_buffer,
@@ -279,7 +279,7 @@ impl RendererAsh {
                         &[model.vertex_buffer],
                         &device_size_offsets
                     );
-                self.device.cmd_bind_index_buffer(command_buffer, model.index_buffer, 0, vk::IndexType::UINT16);
+                self.device.cmd_bind_index_buffer(command_buffer, model.index_buffer, 0, vk::IndexType::UINT32);
                 self.device.cmd_bind_descriptor_sets(
                     command_buffer,
                     vk::PipelineBindPoint::GRAPHICS,
@@ -360,7 +360,10 @@ impl System for RendererAsh {
             let model_component_builder = world.borrow_component::<ModelComponentBuilder>().unwrap();
             for mc in model_component_builder.iter() {
                 if let Some(component) = mc {
+                    // TODO: Make Component Push fuction to account for None
                     model_vec.push(Some(component.build(&self.context, &self.device, &self.buffers, self.pipeline.descriptor_set_layout())));
+                } else {
+                    model_vec.push(None);
                 }
             }
 
@@ -391,15 +394,19 @@ impl System for RendererAsh {
     fn run(&mut self, world: &mut World) {
         //let option_buffers = world.borrow_component::<BufferComponent>().unwrap();
         let models = world.borrow_component::<ModelComponent>().unwrap();
-        //let transform_component = world.borrow_component::<TransformComponent>().unwrap();
-        //let camera = world.get_resource::<Camera>().unwrap();
+        let mut transform_component = world.borrow_component_mut::<TransformComponent>().unwrap();
+        let camera = world.get_resource::<Camera>().unwrap();
         //let mut buffers_push_constant: Vec<(&BufferComponent, PushConstantData)> = Vec::new();
         let mut model_vec: Vec<&ModelComponent> = Vec::new();
+        let mut model_matrix = nalgebra::Matrix4::identity();
         for i in models.iter().enumerate() {
             if let Some(buffer) = i.1 {
-             //   if let Some(transform) = &transform_component[i.0] {
+                if let Some(transform) = &mut transform_component[i.0] {
+                    transform.rotation.x += (0.5 * world.get_dt());
+                    transform.rotation.y += (0.25 * world.get_dt());
+                    model_matrix = transform.mat4_less_computation();
                     model_vec.push(buffer);
-            //    }
+                }
             }
         }
         /*let mut buffers_push_constant: Vec<&BufferComponent> = Vec::new();
@@ -411,7 +418,7 @@ impl System for RendererAsh {
             }
         }
         */
-        self.draw_frame(model_vec);
+        self.draw_frame(model_vec, model_matrix, camera.get_projection(), camera.get_view());
     }
     // TODO: When Uniform buffers, Textures, and Models are abstracted to components, they need to be freed here
     fn shutdown(&mut self, world: &mut World) {
