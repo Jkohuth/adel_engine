@@ -403,8 +403,8 @@ impl System for RendererAsh {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &mut transform_component[i.0] {
                     //transform.rotation.x += (0.5 * world.get_dt());
-                    transform.rotation.y -= (0.25 * world.get_dt());
-                    model_matrix = transform.mat4_less_computation();
+                    //transform.rotation.y -= (0.25 * world.get_dt());
+                    model_matrix = Matrix4::identity(); //transform.mat4_less_computation();
                     model_vec.push(buffer);
                 }
             }

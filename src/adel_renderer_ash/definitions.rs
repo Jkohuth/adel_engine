@@ -21,9 +21,9 @@ pub struct Vertex2d {
 // Note: To use the builder class properly these can be the default vector values and not option
 pub struct VertexBuilder {
     position: Option<Vector3::<f32>>,
-    color: Option<Vector3::<f32>>,
-    normal: Option<Vector3::<f32>>,
-    uv: Option<Vector2::<f32>>,
+    color:    Option<Vector3::<f32>>,
+    normal:   Option<Vector3::<f32>>,
+    uv:       Option<Vector2::<f32>>,
 }
 
 impl VertexBuilder {
@@ -39,7 +39,7 @@ impl VertexBuilder {
         Vertex {
             position: self.position.unwrap_or_default(),
             color: self.color.unwrap_or_default(),
-            //normal: self.normal.unwrap_or_default(),
+            normal: self.normal.unwrap_or_default(),
             uv: self.uv.unwrap_or_default()
         }
     }
@@ -75,7 +75,7 @@ impl Default for VertexBuilder {
 pub struct Vertex {
     pub position: Vector3::<f32>,
     pub color: Vector3::<f32>,
-    //pub normal: Vector3::<f32>,
+    pub normal: Vector3::<f32>,
     pub uv: Vector2::<f32>
 }
 
@@ -90,7 +90,7 @@ impl Vertex {
             .input_rate(vk::VertexInputRate::VERTEX)
             .build()]
     }
-    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
+    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
         let pos_attrib = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(0)
@@ -103,32 +103,24 @@ impl Vertex {
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset(std::mem::size_of::<nalgebra::Vector3<f32>>() as u32)
             .build();
-        /*let normal_attrib = vk::VertexInputAttributeDescription::builder()
+        let normal_attrib = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(2)
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset((std::mem::size_of::<nalgebra::Vector3::<f32>>() + std::mem::size_of::<nalgebra::Vector3::<f32>>()) as u32)
-            .build();*/
-        //let uv_attrib = vk::VertexInputAttributeDescription::builder()
-        //    .binding(0)
-        //    .location(3)
-        //    .format(vk::Format::R32G32_SFLOAT)
-        //    .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3::<f32>>()) as u32)
-        //    .build();
+            .build();
         let uv_attrib = vk::VertexInputAttributeDescription::builder()
             .binding(0)
-            .location(2)
+            .location(3)
             .format(vk::Format::R32G32_SFLOAT)
-            .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>()) as u32)
+            .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3::<f32>>()) as u32)
             .build();
-        //[pos_attrib, color_attrib, normal_attrib, uv_coord]
-        [pos_attrib, color_attrib, uv_attrib]
+        [pos_attrib, color_attrib, normal_attrib, uv_attrib]
     }
 }
 impl PartialEq for Vertex {
     fn eq(&self, other: &Self) -> bool {
-        //self.position == other.position && self.color == other.color && self.normal == other.normal && self.uv == other.uv
-        self.position == other.position && self.color == other.color && self.uv == other.uv
+        self.position == other.position && self.color == other.color && self.normal == other.normal && self.uv == other.uv
     }
 }
 
@@ -142,9 +134,9 @@ impl Hash for Vertex {
         self.color[0].to_bits().hash(state);
         self.color[1].to_bits().hash(state);
         self.color[2].to_bits().hash(state);
-        //self.normal[0].to_bits().hash(state);
-        //self.normal[1].to_bits().hash(state);
-        //self.normal[2].to_bits().hash(state);
+        self.normal[0].to_bits().hash(state);
+        self.normal[1].to_bits().hash(state);
+        self.normal[2].to_bits().hash(state);
         self.uv[0].to_bits().hash(state);
         self.uv[1].to_bits().hash(state);
     }

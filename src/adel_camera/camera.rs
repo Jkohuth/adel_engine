@@ -72,19 +72,31 @@ impl Camera {
         let v = w.cross(&u);
 
         self.view_matrix = Matrix4::identity();
-        self.view_matrix[(0, 0)] = u.x;
-        self.view_matrix[(1, 0)] = u.y;
-        self.view_matrix[(2, 0)] = u.z;
-        self.view_matrix[(0, 1)] = v.x;
-        self.view_matrix[(1, 1)] = v.y;
-        self.view_matrix[(2, 1)] = v.z;
-        self.view_matrix[(0, 2)] = w.x;
-        self.view_matrix[(1, 2)] = w.y;
-        self.view_matrix[(2, 2)] = w.z;
-        self.view_matrix[(3, 0)] = -Vector3::dot(&u, &position);
-        self.view_matrix[(3, 1)] = -Vector3::dot(&v, &position);
-        self.view_matrix[(3, 2)] = -Vector3::dot(&w, &position);
+        //self.view_matrix[(0, 0)] = u.x;
+        //self.view_matrix[(1, 0)] = u.y;
+        //self.view_matrix[(2, 0)] = u.z;
+        //self.view_matrix[(0, 1)] = v.x;
+        //self.view_matrix[(1, 1)] = v.y;
+        //self.view_matrix[(2, 1)] = v.z;
+        //self.view_matrix[(0, 2)] = w.x;
+        //self.view_matrix[(1, 2)] = w.y;
+        //self.view_matrix[(2, 2)] = w.z;
+        //self.view_matrix[(3, 0)] = -Vector3::dot(&u, &position);
+        //self.view_matrix[(3, 1)] = -Vector3::dot(&v, &position);
+        //self.view_matrix[(3, 2)] = -Vector3::dot(&w, &position);
 
+        self.view_matrix[(0, 0)] = u.x;
+        self.view_matrix[(0, 1)] = u.y;
+        self.view_matrix[(0, 2)] = u.z;
+        self.view_matrix[(1, 0)] = v.x;
+        self.view_matrix[(1, 1)] = v.y;
+        self.view_matrix[(1, 2)] = v.z;
+        self.view_matrix[(2, 0)] = w.x;
+        self.view_matrix[(2, 1)] = w.y;
+        self.view_matrix[(2, 2)] = w.z;
+        self.view_matrix[(0, 3)] = -Vector3::dot(&u, &position);
+        self.view_matrix[(1, 3)] = -Vector3::dot(&v, &position);
+        self.view_matrix[(2, 3)] = -Vector3::dot(&w, &position);
     }
 
     pub fn set_view_target(&mut self, position: Vector3::<f32>, target: Vector3::<f32>, up: Option<Vector3::<f32>>) {

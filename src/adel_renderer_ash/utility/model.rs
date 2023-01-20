@@ -4,7 +4,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io::BufReader;
 use std::collections::HashMap;
-use crate::adel_renderer_ash::definitions::Vertex;
+use crate::adel_renderer_ash::definitions::{VertexBuilder, Vertex};
 use crate::adel_renderer_ash::utility::{context::AshContext, buffers::AshBuffers};
 use nalgebra::{Vector2, Vector3};
 use image::{RgbaImage, DynamicImage};
@@ -86,26 +86,35 @@ impl ModelComponentBuilder {
 
         let mut unique_vertices = HashMap::new();
         for model in &models {
-            for index in &model.mesh.indices {
+            log::info!("Index Sizes Position {:?}, normal {:?}, uv {:?}", &model.mesh.indices.len(), &model.mesh.normals.len(), &model.mesh.texcoords.len());
+            // Position
+            for (i, index ) in model.mesh.indices.iter().enumerate() {
                 let pos_offset = (3 * index) as usize;
-                let color_offset = (3 * index) as usize;
-                let uv_offset = (2 * index) as usize;
+                let normal_offset = (3 * model.mesh.normal_indices[i]) as usize;
+                let uv_offset = (2 * model.mesh.texcoord_indices[i]) as usize;
 
                 let mut vertex_builder = Vertex::builder()
                     .position(Vector3::new(
                         model.mesh.positions[pos_offset],
                         model.mesh.positions[pos_offset+1],
                         model.mesh.positions[pos_offset+2]))
+                    .normal(Vector3::new(
+                        model.mesh.normals[normal_offset],
+                        model.mesh.normals[normal_offset+1],
+                        model.mesh.normals[normal_offset+2]))
                     .uv(Vector2::new(
                         model.mesh.texcoords[uv_offset],
                         1.0 - model.mesh.texcoords[uv_offset +1]));
 
                 // Confirm if Vertex Colors were supplied for this Model, if not builder will set them to default
                 if model.mesh.vertex_color.len() > 0 {
+                    let color_offset = (3 * index) as usize;
                     vertex_builder = vertex_builder.color(Vector3::new(
                         model.mesh.vertex_color[color_offset + 0],
                         model.mesh.vertex_color[color_offset + 1],
-                        model.mesh.vertex_color[color_offset + 2]));                }
+                        model.mesh.vertex_color[color_offset + 2]));
+                }
+
                 let vertex = vertex_builder.build();
 
                 if let Some(index) = unique_vertices.get(&vertex) {

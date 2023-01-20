@@ -14,7 +14,7 @@ fn main() {
     model_build.load_texture(Path::new("resources/viking_room.png"));
     let camera_transform = TransformComponent::default();
     let mut cube_transform = TransformComponent::default();
-    cube_transform.translation.z += 5.0;
+    //cube_transform.translation.z += 5.0;
     let keyboard_component = KeyboardComponent{};
     //model_build.load_texture(Path::new("resources/viking_room.png"));
     let entity = world.new_entity();
