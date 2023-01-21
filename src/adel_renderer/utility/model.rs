@@ -4,8 +4,8 @@ use std::path::Path;
 use std::fs::File;
 use std::io::BufReader;
 use std::collections::HashMap;
-use crate::adel_renderer_ash::definitions::{VertexBuilder, Vertex};
-use crate::adel_renderer_ash::utility::{context::AshContext, buffers::AshBuffers};
+use crate::adel_renderer::definitions::{VertexBuilder, Vertex};
+use crate::adel_renderer::utility::{context::AshContext, buffers::AshBuffers};
 use nalgebra::{Vector2, Vector3};
 use image::{RgbaImage, DynamicImage};
 

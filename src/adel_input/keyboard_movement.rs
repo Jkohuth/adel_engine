@@ -9,7 +9,7 @@ use crate::adel_ecs::{System, World};
 //use crate::adel_renderer::TransformComponent;
 
 use crate::adel_camera::Camera;
-use crate::adel_renderer_ash::definitions::{TransformComponent, Transform2dComponent};
+use crate::adel_renderer::definitions::{TransformComponent, Transform2dComponent};
 // This class will be a struct that contains the current input variables
 // Which keys and which state shall be contained in this class
 // Other Classes need to reference this class in order to update accordingly

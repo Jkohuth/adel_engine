@@ -2,7 +2,7 @@ use ash::vk;
 use std::ffi::CString;
 use inline_spirv::include_spirv;
 use crate::offset_of;
-use crate::adel_renderer_ash::definitions::{PushConstantData, PushConstantData2D, Vertex, Vertex2d};
+use crate::adel_renderer::definitions::{PushConstantData, PushConstantData2D, Vertex, Vertex2d};
 
 pub struct AshPipeline {
     render_pass: vk::RenderPass,
@@ -175,12 +175,12 @@ impl AshPipeline {
     ) -> vk::Pipeline {
 
         // Create Shader Modules
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/push.frag", frag, glsl, entry="main");
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/uniform_buffer.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/uniform_buffer.frag", frag, glsl, entry="main");
-        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/texture.vert", vert, glsl, entry="main");
-        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer_ash/shaders/texture.frag", frag, glsl, entry="main");
+        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.vert", vert, glsl, entry="main");
+        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.frag", frag, glsl, entry="main");
+        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/uniform_buffer.vert", vert, glsl, entry="main");
+        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/uniform_buffer.frag", frag, glsl, entry="main");
+        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/texture.vert", vert, glsl, entry="main");
+        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/texture.frag", frag, glsl, entry="main");
         let vert_shader = AshPipeline::create_shader_module(&device, vert_spv);
         let frag_shader = AshPipeline::create_shader_module(&device, frag_spv);
 

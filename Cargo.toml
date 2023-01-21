@@ -9,54 +9,32 @@ edition = "2021"
 criterion = "0.3"
 
 [dependencies]
-#vulkano = {path = "../local_resources/vulkano/vulkano"}
-#vulkano-shaders = {path = "../local_resources/vulkano/vulkano-shaders"}
-#vulkano-win = {path = "../local_resources/vulkano/vulkano-win"}
+anyhow = "1.0"
 ash = "0.37.0"
-inline-spirv = "0.1.4"
-
-
-winit = "0.27.0"
-#glam = "0.21.2"
 chrono = "0.4.19"
-more-asserts = "0.3.0"
-log = "0.4"
-simple_logger = "4.0.0"
 image = "0.24.0"
-#bytemuck = { version = "1.7", features = ["derive", "extern_crate_std", "min_const_generics"] }
-tobj = "3.2.3"
+inline-spirv = "0.1.4"
+log = "0.4"
+more-asserts = "0.3.0"
 nalgebra = "0.31.0"
-#nalgebra-glm = "0.17.0"
 num = "0.4.0"
+simple_logger = "4.0.0"
+tobj = "3.2.3"
+winit = "0.27.0"
 
 [[bin]]
 name = "hello_world"
 path = "bin/hello_world.rs"
 
-#[[bin]]
-#name = "cube"
-#path = "bin/cube.rs"
-#
-#[[bin]]
-#name = "ash"
-#path = "bin/ash.rs"
-#
-#[[bin]]
-#name = "index_buffer"
-#path = "bin/index_buffer.rs"
-#
-#[[bin]]
-#name = "movement"
-#path = "bin/movement.rs"
-
-#[[bin]]
-#name = "texture"
-#path = "bin/texture.rs"
-
 [[bin]]
 name = "model"
 path = "bin/model.rs"
 
+# TODO: Post Refactor add benchmark functions to test the time it takes to
+# Initiate Vulkan
+# Create Windows
+# Load Textures
+# Load models
 [[bench]]
 name = "vulkano_bench"
 path = "benches/vulkano_bench.rs"

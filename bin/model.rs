@@ -1,8 +1,8 @@
 use adel::app::Application;
 use adel::ecs::{World};
-use adel::renderer_ash::utility::model::{ModelComponentBuilder, ModelComponent};
+use adel::renderer::utility::model::{ModelComponentBuilder, ModelComponent};
 use adel::input::KeyboardHandler;
-use adel::renderer_ash::TransformComponent;
+use adel::renderer::TransformComponent;
 use std::path::Path;
 use adel::input::KeyboardComponent;
 use nalgebra;

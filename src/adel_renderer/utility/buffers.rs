@@ -6,7 +6,7 @@ use super::{
     swapchain::AshSwapchain,
     context::AshContext,
 };
-use crate::adel_renderer_ash::definitions::{TriangleComponent, UniformBufferObject, Vertex, Vertex2d};
+use crate::adel_renderer::definitions::{TriangleComponent, UniformBufferObject, Vertex, Vertex2d};
 use super::structures;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
 pub struct AshBuffers {

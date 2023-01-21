@@ -10,7 +10,7 @@ use tobj::Model;
 
 use crate::adel_ecs::{System, World};
 // TODO: Create a prelude and add these to it
-use crate::adel_renderer_ash::utility::{
+use crate::adel_renderer::utility::{
     constants::*,
     swapchain::AshSwapchain,
     context::{AshContext, create_logical_device},
@@ -342,7 +342,7 @@ impl RendererAsh {
 
 }
 use nalgebra::{Matrix2, Matrix3, Matrix4};
-use crate::adel_renderer_ash::Transform2dComponent;
+use crate::adel_renderer::Transform2dComponent;
 pub fn create_push_constant_data_tmp(tmp : Matrix4<f32>) -> PushConstantData {
     PushConstantData {
         transform: tmp, //camera_projection,
