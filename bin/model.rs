@@ -1,33 +1,33 @@
 use adel::app::Application;
 use adel::ecs::{World};
-use adel::renderer::{ModelBuilder, ModelComponent, TransformComponent, Vertex};
+use adel::renderer_ash::utility::model::{ModelComponentBuilder, ModelComponent};
+use adel::input::KeyboardHandler;
+use adel::renderer_ash::TransformComponent;
+use std::path::Path;
 use adel::input::KeyboardComponent;
-use glam::{Vec3};
+use nalgebra;
 fn main() {
-        simple_logger::SimpleLogger::new().env().init().unwrap();
-    let obj_file = String::from("/home/jakob/projects/blender_models/obj_files/cube.obj");
-    /*//let obj_file = String::from("/home/jakob/projects/blender_models/obj_files/scythe.obj");
-    std::process::exit(0); */
-    let transform: TransformComponent = TransformComponent::new(
-        Vec3::new(0.0, 0.0, 2.5),
-        Vec3::new(0.5, 0.5, 0.5),
-        Vec3::new(0.0, 0.0, 0.0),
-    );
-    let camera_controller_transform: TransformComponent = TransformComponent::new(
-        Vec3::new(-1.0, 2.0, -2.0),
-        Vec3::new(1.0, 1.0, 1.0),
-        Vec3::new(0.0, 0.0, 0.0),
-    );
-
-    let mut world: World = World::new();
-    let cube_entity = world.new_entity();
-    world.add_component_to_entity(cube_entity, ModelBuilder::load_model(obj_file.as_str()));
-    world.add_component_to_entity(cube_entity, transform);
-    let camera_entity = world.new_entity();
-    world.add_component_to_entity(camera_entity, camera_controller_transform);
-    world.add_component_to_entity(camera_entity, KeyboardComponent);
+    simple_logger::SimpleLogger::new().env().init().unwrap();
+    let mut world = World::new();
+    let mut model_build = ModelComponentBuilder::new();
+    model_build.load_model(Path::new("resources/viking_room.obj"));
+    model_build.load_texture(Path::new("resources/viking_room.png"));
+    let camera_transform = TransformComponent::default();
+    log::info!("Camera Transform {:?}", camera_transform);
+    let mut cube_transform = TransformComponent::default();
+    //cube_transform.translation.z += 5.0;
+    //cube_transform.rotation.x += 180.0;
+    let keyboard_component = KeyboardComponent{};
+    //model_build.load_texture(Path::new("resources/viking_room.png"));
+    let entity = world.new_entity();
+    let camera_entity= world.new_entity();
+    world.add_component_to_entity(entity, model_build);
+    world.add_component_to_entity(entity, cube_transform);
+    world.add_component_to_entity(camera_entity, camera_transform);
+    world.add_component_to_entity(camera_entity, keyboard_component);
     let app = Application::new(world);
     app.main_loop();
+
 }
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())

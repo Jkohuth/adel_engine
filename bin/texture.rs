@@ -1,9 +1,9 @@
 
 use adel::app::Application;
 use adel::ecs::World;
-use adel::renderer_ash::definitions::{VertexIndexComponent, Vertex, Vertex2d};
+use adel::renderer_ash::definitions::{VertexIndexComponent, Vertex};
 use nalgebra::{Vector2, Vector3};
-use adel::renderer_ash::definitions::{TransformComponent, Transform2dComponent};
+use adel::renderer_ash::definitions::{TransformComponent};
 use adel::input::KeyboardComponent;
 use nalgebra::Matrix4;
 fn main() {
@@ -22,7 +22,7 @@ fn main() {
         Vertex { position: Vector3::new( 0.5,  1.0, 1.0), color: Vector3::new(0.0, 0.0, 1.0), tex_coord: Vector2::new(0.0, 1.0) },
         Vertex { position: Vector3::new(-0.5,  1.0, 1.0), color: Vector3::new(1.0, 1.0, 1.0), tex_coord: Vector2::new(1.0, 1.0) },
     ];
-    let indices: Vec<u16> = vec![0, 1, 2, 2, 3, 0];
+    let indices: Vec<u32> = vec![0, 1, 2, 2, 3, 0];
 
     let vi_component = VertexIndexComponent {
         vertices,

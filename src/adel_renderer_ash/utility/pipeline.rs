@@ -98,6 +98,23 @@ impl AshPipeline {
         }
 
     }
+    fn create_descriptor_set_layout_ubo(device: &ash::Device) -> vk::DescriptorSetLayout {
+        let ubo_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .build();
+        let bindings = &[ubo_layout_bindings];
+        let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(bindings)
+            .build();
+        unsafe {
+            device
+                .create_descriptor_set_layout(&descriptor_layout_info, None)
+                .expect("Failed to create Descriptor Set Layout!")
+        }
+    }
     fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLayout {
         let ubo_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
@@ -217,7 +234,9 @@ impl AshPipeline {
         let rasterization_statue_create_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(false)
             .cull_mode(vk::CullModeFlags::BACK)
-            .front_face(vk::FrontFace::CLOCKWISE)
+            //.cull_mode(vk::CullModeFlags::NONE)
+            //.front_face(vk::FrontFace::CLOCKWISE)
+            .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .line_width(1.0)
             .polygon_mode(vk::PolygonMode::FILL)
             .rasterizer_discard_enable(false)

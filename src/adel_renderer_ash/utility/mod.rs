@@ -1,10 +1,11 @@
+pub mod buffers;
 pub mod constants;
+pub mod context;
 pub mod debug;
+pub mod model;
+pub mod pipeline;
 pub mod platforms;
 pub mod structures;
-pub mod tools;
-pub mod context;
 pub mod swapchain;
-pub mod pipeline;
-pub mod buffers;
 pub mod sync;
+pub mod tools;
