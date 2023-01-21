@@ -53,6 +53,8 @@ impl Application {
             aspect_ratio = dims.width as f32 / dims.height as f32;
         }
         camera.set_perspective_projection((50.0f32).to_radians(), aspect_ratio, 0.1, 10.0);
+        camera.set_view_target(nalgebra::Vector3::<f32>::new(2.0, 2.0, 2.0), nalgebra::Vector3::<f32>::new(0.0, 0.0, 0.0),
+            Some(nalgebra::Vector3::<f32>::new(0.0, 0.0, 1.0)));
         //camera.set_view_direction(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.1, 0.0, 1.0), None);
         //camera.set_view_target(Vector3::<f32>::new(-1.0, 2.0, -2.0), Vector3::<f32>::new(0.0, 0.0, 2.5), None);
         // The current lack of depth buffering effects whether it can be rendered

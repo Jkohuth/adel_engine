@@ -86,7 +86,6 @@ impl ModelComponentBuilder {
 
         let mut unique_vertices = HashMap::new();
         for model in &models {
-            log::info!("Index Sizes Position {:?}, normal {:?}, uv {:?}", &model.mesh.indices.len(), &model.mesh.normals.len(), &model.mesh.texcoords.len());
             // Position
             for (i, index ) in model.mesh.indices.iter().enumerate() {
                 let pos_offset = (3 * index) as usize;
@@ -104,7 +103,7 @@ impl ModelComponentBuilder {
                         model.mesh.normals[normal_offset+2]))
                     .uv(Vector2::new(
                         model.mesh.texcoords[uv_offset],
-                        1.0 - model.mesh.texcoords[uv_offset +1]));
+                        model.mesh.texcoords[uv_offset +1]));
 
                 // Confirm if Vertex Colors were supplied for this Model, if not builder will set them to default
                 if model.mesh.vertex_color.len() > 0 {

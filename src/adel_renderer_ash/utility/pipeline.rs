@@ -233,8 +233,8 @@ impl AshPipeline {
 
         let rasterization_statue_create_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(false)
-            //.cull_mode(vk::CullModeFlags::BACK)
-            .cull_mode(vk::CullModeFlags::NONE)
+            .cull_mode(vk::CullModeFlags::BACK)
+            //.cull_mode(vk::CullModeFlags::NONE)
             //.front_face(vk::FrontFace::CLOCKWISE)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .line_width(1.0)

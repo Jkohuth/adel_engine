@@ -19,4 +19,9 @@ pub unsafe fn as_bytes<T: Sized>(p: &T) -> &[u8] {
 pub fn print_type_of<T>(_: &T) {
     log::info!("T is of Type {:?}", std::any::type_name::<T>());
 }
+use nalgebra;
+pub fn print_row_ordered_matrix(mat4: nalgebra::Matrix4::<f32>) {
+    for i in mat4.iter() {
 
+    }
+}

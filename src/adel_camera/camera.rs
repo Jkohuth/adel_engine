@@ -7,6 +7,7 @@ pub struct Camera {
     view_matrix: Matrix4<f32>,
     _name: &'static str,
 }
+// NOTE: Nalgebra is Column Ordered matrix
 impl Camera {
     pub fn new() -> Self {
         Self {
