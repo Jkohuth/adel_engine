@@ -27,8 +27,8 @@ name = "hello_world"
 path = "bin/hello_world.rs"
 
 [[bin]]
-name = "model"
-path = "bin/model.rs"
+name = "3d_model"
+path = "bin/3d_model.rs"
 
 # TODO: Post Refactor add benchmark functions to test the time it takes to
 # Initiate Vulkan

@@ -1,13 +1,13 @@
 use ash::vk;
 use anyhow::{anyhow, Result};
 use std::path::Path;
-use image::{ DynamicImage, GenericImageView};
+use image::{ DynamicImage};
 use super::{
     pipeline::AshPipeline,
     swapchain::AshSwapchain,
     context::AshContext,
 };
-use crate::adel_renderer::definitions::{TriangleComponent, UniformBufferObject, Vertex, Vertex2d};
+use crate::adel_renderer::definitions::{UniformBufferObject, Vertex};
 use super::structures;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
 pub struct AshBuffers {
@@ -154,7 +154,7 @@ impl AshBuffers {
         descriptor_set_layout: vk::DescriptorSetLayout,
         uniform_buffers: &Vec<vk::Buffer>,
     ) -> Vec<vk::DescriptorSet> {
-        let mut layouts: Vec<vk::DescriptorSetLayout> = vec![descriptor_set_layout; MAX_FRAMES_IN_FLIGHT];
+        let layouts: Vec<vk::DescriptorSetLayout> = vec![descriptor_set_layout; MAX_FRAMES_IN_FLIGHT];
 
         let descriptor_set_allocate_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(descriptor_pool)
@@ -195,7 +195,7 @@ impl AshBuffers {
         texture_image_view: vk::ImageView,
         texture_sampler: vk::Sampler
     ) -> Result<Vec<vk::DescriptorSet>> {
-        let mut layouts: Vec<vk::DescriptorSetLayout> = vec![descriptor_set_layout; MAX_FRAMES_IN_FLIGHT];
+        let layouts: Vec<vk::DescriptorSetLayout> = vec![descriptor_set_layout; MAX_FRAMES_IN_FLIGHT];
 
         let descriptor_set_allocate_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(descriptor_pool)
@@ -371,7 +371,7 @@ impl AshBuffers {
         }
         let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER, vk::MemoryPropertyFlags::DEVICE_LOCAL)?;
-        AshBuffers::copy_buffer(device, &staging_buffer, &vertex_buffer, buffer_size, command_pool, submit_queue);
+        AshBuffers::copy_buffer(device, &staging_buffer, &vertex_buffer, buffer_size, command_pool, submit_queue)?;
 
         unsafe {
             device.destroy_buffer(staging_buffer, None);
@@ -404,7 +404,7 @@ impl AshBuffers {
         }
         let (index_buffer, index_buffer_memory) = AshBuffers::create_buffer(context, device, buffer_size,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER, vk::MemoryPropertyFlags::DEVICE_LOCAL)?;
-        AshBuffers::copy_buffer(device, &staging_buffer, &index_buffer, buffer_size, command_pool, submit_queue);
+        AshBuffers::copy_buffer(device, &staging_buffer, &index_buffer, buffer_size, command_pool, submit_queue)?;
 
         unsafe {
             device.destroy_buffer(staging_buffer, None);
@@ -563,7 +563,7 @@ impl AshBuffers {
     pub fn create_texture_image_bak(context: &AshContext, device: &ash::Device, submit_queue: vk::Queue, image_path: &Path, command_pool: &vk::CommandPool)
         -> Result<(vk::Image, vk::DeviceMemory)>
     {
-        let mut image_object: DynamicImage = image::open(image_path).unwrap();
+        let image_object: DynamicImage = image::open(image_path).unwrap();
         //image_object = image_object.flipv();
         let (image_width, image_height) = (image_object.width(), image_object.height());
         // Size is u8 - per color size, 4 - rgba, width*height - area
@@ -612,7 +612,7 @@ impl AshBuffers {
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             command_pool,
             submit_queue
-        );
+        )?;
         AshBuffers::copy_buffer_to_image(
             device,
             staging_buffer,
@@ -621,7 +621,7 @@ impl AshBuffers {
             image_height,
             command_pool,
             submit_queue
-        );
+        )?;
         AshBuffers::transition_image_layout(
             device,
             texture_image,
@@ -630,7 +630,7 @@ impl AshBuffers {
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             command_pool,
             submit_queue,
-        );
+        )?;
         unsafe {
             device.destroy_buffer(staging_buffer, None);
             device.free_memory(staging_buffer_memory, None);

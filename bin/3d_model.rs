@@ -1,11 +1,9 @@
 use adel::app::Application;
 use adel::ecs::{World};
-use adel::renderer::utility::model::{ModelComponentBuilder, ModelComponent};
-use adel::input::KeyboardHandler;
+use adel::renderer::utility::model::{ModelComponentBuilder};
 use adel::renderer::TransformComponent;
 use std::path::Path;
 use adel::input::KeyboardComponent;
-use nalgebra;
 fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
     let mut world = World::new();
@@ -14,7 +12,7 @@ fn main() {
     model_build.load_texture(Path::new("resources/viking_room.png"));
     let camera_transform = TransformComponent::default();
     log::info!("Camera Transform {:?}", camera_transform);
-    let mut cube_transform = TransformComponent::default();
+    let cube_transform = TransformComponent::default();
     //cube_transform.translation.z += 5.0;
     //cube_transform.rotation.x += 180.0;
     let keyboard_component = KeyboardComponent{};
@@ -28,7 +26,4 @@ fn main() {
     let app = Application::new(world);
     app.main_loop();
 
-}
-fn print_type_of<T>(_: &T) {
-    println!("{}", std::any::type_name::<T>())
 }

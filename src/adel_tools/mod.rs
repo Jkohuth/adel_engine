@@ -1,3 +1,4 @@
+use nalgebra;
 // Simple offset_of macro akin to C++ offsetof, taken from Ash source code
 #[macro_export]
 macro_rules! offset_of {
@@ -19,9 +20,12 @@ pub unsafe fn as_bytes<T: Sized>(p: &T) -> &[u8] {
 pub fn print_type_of<T>(_: &T) {
     log::info!("T is of Type {:?}", std::any::type_name::<T>());
 }
-use nalgebra;
 pub fn print_row_ordered_matrix(mat4: nalgebra::Matrix4::<f32>) {
-    for i in mat4.iter() {
-
+    let mut mat_arr: [[f32; 4]; 4] = [[0.0; 4]; 4];
+    for (position, value) in mat4.iter().enumerate() {
+        let row_value = position%4;
+        let coloumn_value = position/4;
+        mat_arr[row_value][coloumn_value] = *value;
     }
+    log::info!("Row Ordered Matrix {:?}", mat_arr);
 }

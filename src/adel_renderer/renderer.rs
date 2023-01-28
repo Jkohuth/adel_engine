@@ -4,8 +4,7 @@ use anyhow::{anyhow, Result};
 //use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 //use winit::event_loop::{EventLoop, ControlFlow};
 
-use nalgebra::{Matrix4, Vector2, Vector3};
-use log;
+use nalgebra::{Matrix4, Vector3};
 
 use crate::adel_ecs::{System, World};
 // TODO: Create a prelude and add these to it
@@ -19,17 +18,11 @@ use crate::adel_renderer::utility::{
     model::*,
 };
 use super::definitions::{
-    BufferComponent,
-    create_push_constant_data,
     PushConstantData,
+    BufferComponent,
     TransformComponent,
-    UniformBufferObject,
-    VertexIndexComponent,
-    Vertex2d,
-    VertexBuffer,
 };
 use crate::adel_camera::Camera;
-use crate::adel_tools::*;
 
 use winit::window::Window;
 use std::rc::{Rc};
@@ -50,7 +43,6 @@ pub struct RendererAsh {
     sync_objects: SyncObjects,
     current_frame: usize,
     is_framebuffer_resized: bool,
-    descriptor_set: Option<Vec<vk::DescriptorSet>>,
 
     pub window: Rc<Window>,
 
@@ -82,8 +74,6 @@ impl RendererAsh {
             sync_objects,
             current_frame: 0,
             is_framebuffer_resized: false,
-            descriptor_set: None,
-
 
             window,
             name: NAME,
@@ -245,7 +235,7 @@ impl RendererAsh {
         };
         if is_resized {
             self.is_framebuffer_resized = false;
-            self.recreate_swapchain();
+            self.recreate_swapchain()?;
         }
         // isFrameStarted = true;
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -268,7 +258,7 @@ impl RendererAsh {
             self.device
                 .cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline());
             for model in models.iter() {
-                AshBuffers::update_uniform_buffer_new(&self.device, &model.uniform_buffers_memory, self.current_frame, model_matrix, proj, view);
+                AshBuffers::update_uniform_buffer_new(&self.device, &model.uniform_buffers_memory, self.current_frame, model_matrix, proj, view)?;
                 let descriptor_sets_to_bind = [model.descriptor_sets[self.current_frame]];
                 self.device
                     .cmd_bind_vertex_buffers(command_buffer,
@@ -302,7 +292,7 @@ impl RendererAsh {
         Ok(())
     }
 
-    fn recreate_swapchain(&mut self) {
+    fn recreate_swapchain(&mut self) -> Result<()> {
         unsafe {
             self.device
                 .device_wait_idle()
@@ -315,16 +305,17 @@ impl RendererAsh {
             &self.context,
             &self.device,
             &self.window,
-        );
-        self.buffers.recreate_depth_image(&self.context, &self.device, self.swapchain.swapchain_info.swapchain_extent);
-        self.pipeline.recreate_render_pass(&self.device, self.swapchain.swapchain_info.swapchain_format);
+        )?;
+        self.buffers.recreate_depth_image(&self.context, &self.device, self.swapchain.swapchain_info.swapchain_extent)?;
+        self.pipeline.recreate_render_pass(&self.device, self.swapchain.swapchain_info.swapchain_format)?;
         self.buffers.recreate_framebuffers(
             &self.device,
             self.pipeline.render_pass().clone(),
             &self.swapchain.image_views(),
             self.buffers.depth_image_view().clone(),
             self.swapchain.extent(),
-        );
+        )?;
+        Ok(())
         // NOTE: sync_objects may need to be recreated if the total number of frames in flight changed
     }
 
@@ -414,7 +405,7 @@ impl System for RendererAsh {
             }
         }
         */
-        self.draw_frame(model_vec, model_matrix, camera.get_projection(), camera.get_view());
+        self.draw_frame(model_vec, model_matrix, camera.get_projection(), camera.get_view()).expect("Failed to draw frame");
     }
     // TODO: When Uniform buffers, Textures, and Models are abstracted to components, they need to be freed here
     fn shutdown(&mut self, world: &mut World) {

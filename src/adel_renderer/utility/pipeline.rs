@@ -2,8 +2,7 @@ use ash::vk;
 use anyhow::Result;
 use std::ffi::CString;
 use inline_spirv::include_spirv;
-use crate::offset_of;
-use crate::adel_renderer::definitions::{PushConstantData, Vertex};
+use crate::adel_renderer::definitions::{Vertex};
 
 pub struct AshPipeline {
     render_pass: vk::RenderPass,
@@ -100,6 +99,7 @@ impl AshPipeline {
 
     }
 
+    #[allow(dead_code)]
     fn create_descriptor_set_layout_ubo(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
         let ubo_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)

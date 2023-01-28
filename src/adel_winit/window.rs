@@ -44,11 +44,11 @@ impl WinitWindow {
 }
 
 impl System for WinitWindow {
-    fn startup(&mut self, world: &mut World) {}
-    fn run(&mut self, world: &mut World) {
+    fn startup(&mut self, _world: &mut World) {}
+    fn run(&mut self, _world: &mut World) {
         self.window.as_ref().request_redraw();
     }
-    fn shutdown(&mut self, world: &mut World) {}
+    fn shutdown(&mut self, _world: &mut World) {}
     fn name(&self) -> &'static str {
         self.name
     }

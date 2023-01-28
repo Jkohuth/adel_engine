@@ -1,15 +1,12 @@
 use std::collections::HashSet;
-#[allow(unused_imports)]
 use winit::{
-        event::{ElementState, KeyboardInput, VirtualKeyCode},
-        event_loop::ControlFlow,
+        event::{VirtualKeyCode},
 };
 use crate::adel_input::InputConsumer;
 use crate::adel_ecs::{System, World};
-//use crate::adel_renderer::TransformComponent;
 
 use crate::adel_camera::Camera;
-use crate::adel_renderer::definitions::{TransformComponent, Transform2dComponent};
+use crate::adel_renderer::definitions::{TransformComponent};
 // This class will be a struct that contains the current input variables
 // Which keys and which state shall be contained in this class
 // Other Classes need to reference this class in order to update accordingly
@@ -33,7 +30,7 @@ impl KeyboardHandler {
 }
 
 impl System for KeyboardHandler {
-    fn startup(&mut self, world: &mut World) {
+    fn startup(&mut self, _world: &mut World) {
         /* Window object should be a world resource so it can be gotten anywhere
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
@@ -81,7 +78,7 @@ impl System for KeyboardHandler {
         }
     }
 
-    fn shutdown(&mut self, world: &mut World) {}
+    fn shutdown(&mut self, _world: &mut World) {}
     fn name(&self) -> &str {
         self.name
     }
@@ -90,7 +87,8 @@ impl System for KeyboardHandler {
 static LOOK_SPEED: f32 = 1.5;
 static MOVE_SPEED: f32 = 3.0;
 
-use nalgebra::{Vector2, Vector3};
+use nalgebra::{Vector3};
+#[allow(dead_code)]
 fn move_2d_object(keys: &HashSet<VirtualKeyCode>, dt: f32, transform: &mut TransformComponent) {
     let mut move_dir = Vector3::default();
     if keys.contains(&VirtualKeyCode::D) {
@@ -134,7 +132,8 @@ fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &
         camera_transform.rotation += LOOK_SPEED * dt * rotate.normalize();
     }
 
-    camera_transform.rotation.x.clamp(-1.5, 1.5);
+    // This is kinda dumb, look into making it more elegant
+    camera_transform.rotation.x = camera_transform.rotation.x.clamp(-1.5, 1.5);
     camera_transform.rotation.y = camera_transform.rotation.y % (2.0*std::f32::consts::PI);
 
     let yaw = camera_transform.rotation.y;
