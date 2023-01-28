@@ -1,5 +1,7 @@
 use ash::vk;
+
 use std::ffi::CString;
+use anyhow::{anyhow, Result};
 
 use winit::window::Window;
 use super::{
@@ -25,28 +27,28 @@ pub struct AshContext {
 }
 
 impl AshContext {
-    pub fn new(entry: &ash::Entry, window: &Window) -> Self {
-        let instance = AshContext::create_instance(entry, ENABLE_VALIDATION_LAYERS, &VALIDATION_LAYERS.to_vec());
-        let surface_info = AshContext::create_surface(entry, &instance, window);
-        let physical_device = AshContext::pick_physical_device(&instance, &surface_info);
-        let queue_family = AshContext::find_queue_family(&instance, physical_device, &surface_info);
-        let (debug_utils_loader, debug_messenger) = debug::setup_debug_utils(ENABLE_VALIDATION_LAYERS, &entry, &instance);
-        Self {
+    pub fn new(entry: &ash::Entry, window: &Window) -> Result<Self> {
+        let instance = AshContext::create_instance(entry, ENABLE_VALIDATION_LAYERS, &VALIDATION_LAYERS.to_vec())?;
+        let surface_info = AshContext::create_surface(entry, &instance, window)?;
+        let physical_device = AshContext::pick_physical_device(&instance, &surface_info)?;
+        let queue_family = AshContext::find_queue_family(&instance, physical_device, &surface_info)?;
+        let (debug_utils_loader, debug_messenger) = debug::setup_debug_utils(ENABLE_VALIDATION_LAYERS, &entry, &instance)?;
+        Ok(Self {
             instance,
             surface_info,
             physical_device,
             queue_family,
             debug_utils_loader,
             debug_messenger,
-        }
+        })
     }
 
     fn create_instance(
         entry: &ash::Entry,
         is_enable_debug: bool,
         required_validation_layers: &Vec<&str>
-    ) -> ash::Instance {
-        if is_enable_debug && !AshContext::check_validation_layer_support(entry, required_validation_layers) {
+    ) -> Result<ash::Instance> {
+        if is_enable_debug && !AshContext::check_validation_layer_support(entry, required_validation_layers)? {
             panic!("Validation layers requested, but unavailable");
         }
 
@@ -87,11 +89,10 @@ impl AshContext {
 
         let instance: ash::Instance = unsafe {
             entry
-                .create_instance(&create_info, None)
-                .expect("Error: Failed to create Instance")
+                .create_instance(&create_info, None)?
         };
 
-        instance
+        Ok(instance)
     }
 
     fn create_surface(
@@ -99,38 +100,36 @@ impl AshContext {
         instance: &ash::Instance,
         window: &winit::window::Window,
 
-    ) -> SurfaceInfo {
+    ) -> Result<SurfaceInfo> {
         let surface = unsafe {
             platforms::create_surface(entry, instance, window).expect("Error: Failed to create Surface")
         };
 
         let surface_loader = ash::extensions::khr::Surface::new(entry, instance);
-        SurfaceInfo {
+        Ok(SurfaceInfo {
             surface_loader,
             surface,
             screen_width: window.inner_size().width,
             screen_height: window.inner_size().height,
 
-        }
+        })
     }
 
     fn pick_physical_device(
         instance: &ash::Instance,
         surface_info: &SurfaceInfo,
-    ) -> vk::PhysicalDevice {
+    ) -> Result<vk::PhysicalDevice> {
         let physical_device = unsafe {
             instance
-                .enumerate_physical_devices()
-                .expect("Error: Failed to enumerate Physical Devices")
+                .enumerate_physical_devices()?
         };
 
         let result = physical_device.iter().filter(|physical_device| {
-            let is_suitable = AshContext::is_physical_device_suitable(
+            AshContext::is_physical_device_suitable(
                 instance,
                 **physical_device,
                 surface_info
-            );
-            is_suitable
+            ).unwrap_or(false)
         }).min_by_key(|physical_device| {
             let device_properties = unsafe { instance.get_physical_device_properties(**physical_device) };
             let device_name = tools::vk_to_string(&device_properties.device_name);
@@ -142,7 +141,10 @@ impl AshContext {
                 vk::PhysicalDeviceType::VIRTUAL_GPU => 2,
                 vk::PhysicalDeviceType::CPU => 3,
                 vk::PhysicalDeviceType::OTHER => 4,
-                _ => panic!("ERROR: Undefined behavior for device_type"),
+                _ => {
+                    log::warn!("Found Device Type outside enumeration");
+                    999
+                },
             }
         });
 
@@ -153,9 +155,9 @@ impl AshContext {
                 let device_properties = unsafe { instance.get_physical_device_properties(*p_physical_device) };
                 let device_name = super::tools::vk_to_string(&device_properties.device_name);
                 log::info!("Using GPU: {}", device_name);
-                return *p_physical_device;
+                return Ok(*p_physical_device);
             },
-            None => panic!("Error: Failed to find a suitable GPU!"),
+            None => Err(anyhow!("Error: Failed to find a suitable GPU!")),
         }
     }
 
@@ -163,21 +165,21 @@ impl AshContext {
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         surface_info: &SurfaceInfo,
-    ) -> bool {
+    ) -> Result<bool> {
         let device_features = unsafe { instance.get_physical_device_features(physical_device) };
         if device_features.sampler_anisotropy != vk::TRUE {
             log::warn!("Physical Device does not support Sampler Anisotropy");
-            return false;
+            return Ok(false);
         }
-        let indices = AshContext::find_queue_family(instance, physical_device, surface_info);
+        let indices = AshContext::find_queue_family(instance, physical_device, surface_info)?;
 
         // Missing queue family, either graphics or present, return false
-        if !indices.is_complete() { return false; }
+        if !indices.is_complete() { return Ok(false); }
 
         let is_device_extension_supported =
-            AshContext::check_device_extension_support(instance, physical_device);
+            AshContext::check_device_extension_support(instance, physical_device)?;
         let is_swapchain_supported = if is_device_extension_supported {
-            let swapchain_support = swapchain::query_swapchain_support(physical_device, surface_info);
+            let swapchain_support = swapchain::query_swapchain_support(physical_device, surface_info)?;
             !swapchain_support.formats.is_empty() && !swapchain_support.present_modes.is_empty()
         } else {
             false
@@ -185,9 +187,9 @@ impl AshContext {
 
         let is_support_sampler_anisotropy = device_features.sampler_anisotropy == 1;
 
-        return is_device_extension_supported
+        return Ok(is_device_extension_supported
             && is_swapchain_supported
-            && is_support_sampler_anisotropy;
+            && is_support_sampler_anisotropy);
 
     }
 
@@ -195,7 +197,7 @@ impl AshContext {
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         surface_info: &SurfaceInfo,
-    )-> QueueFamilyIndices {
+    )-> Result<QueueFamilyIndices> {
         let queue_families = unsafe {
             instance.get_physical_device_queue_family_properties(physical_device)
         };
@@ -214,7 +216,7 @@ impl AshContext {
                     physical_device,
                     index as u32,
                     surface_info.surface,
-                ).expect("ERROR: Failed to load surface device support")
+                )?
             };
 
             if queue_family.queue_count > 0 && is_present_support {
@@ -227,16 +229,16 @@ impl AshContext {
 
             index += 1;
         }
-        queue_family_indices
+        Ok(queue_family_indices)
     }
+
     fn check_device_extension_support(
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
-    ) -> bool {
+    ) -> Result<bool> {
         let available_extensions = unsafe {
             instance.
-                enumerate_device_extension_properties(physical_device)
-                .expect("ERROR: Failed to get device extension properties")
+                enumerate_device_extension_properties(physical_device)?
         };
 
         let mut available_extension_names = vec![];
@@ -256,20 +258,19 @@ impl AshContext {
             required_extensions.remove(extension_name);
         }
 
-        return required_extensions.is_empty();
+        return Ok(required_extensions.is_empty());
     }
 
     fn check_validation_layer_support(
         entry: &ash::Entry,
         required_validation_layers: &Vec<&str>,
-    ) -> bool {
+    ) -> Result<bool> {
         let layer_properties = entry
-            .enumerate_instance_layer_properties()
-            .expect("Error: Failed to enumerate Instance Layers Properties");
+            .enumerate_instance_layer_properties()?;
 
         if layer_properties.len() <= 0 {
             log::info!("No layers available");
-            return false;
+            return Ok(false);
         }
 
         for required_layer_name in required_validation_layers.iter() {
@@ -284,13 +285,14 @@ impl AshContext {
             }
 
             if is_layer_found == false {
-                return false;
+                return Ok(false);
             }
         }
-        true
+        Ok(true)
     }
-    pub fn get_supported_format(&self, candidates: &[vk::Format], tiling: vk::ImageTiling, features: vk::FormatFeatureFlags) -> vk::Format {
-        unsafe {
+
+    pub fn get_supported_format(&self, candidates: &[vk::Format], tiling: vk::ImageTiling, features: vk::FormatFeatureFlags) -> Result<vk::Format> {
+        let supported_formats = unsafe {
             candidates.iter().cloned().find(|f| {
                 let properties = self.instance().get_physical_device_format_properties(self.physical_device, *f);
                 match tiling {
@@ -298,7 +300,11 @@ impl AshContext {
                     vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
                     _ => false,
                 }
-            }).unwrap()
+            })
+        };
+        match supported_formats {
+            Some(format) => return Ok(format),
+            None => return Err(anyhow!("No supported formats found: Candidates: {:?}", candidates))
         }
     }
 
@@ -323,7 +329,7 @@ impl AshContext {
 pub fn create_logical_device(
     context: &AshContext,
     required_validation_layers: &Vec<&str>,
-) ->  ash::Device {
+) ->  Result<ash::Device> {
     use std::collections::HashSet;
     let mut unique_queue_familes = HashSet::new();
     unique_queue_familes.insert(context.queue_family.graphics_family.unwrap());
@@ -371,9 +377,8 @@ pub fn create_logical_device(
     };
     let device: ash::Device = unsafe {
         context.instance
-            .create_device(context.physical_device, &device_create_info, None)
-            .expect("ERROR: Failed to create logical device")
+            .create_device(context.physical_device, &device_create_info, None)?
     };
 
-    device
+    Ok(device)
 }

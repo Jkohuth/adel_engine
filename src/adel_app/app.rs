@@ -35,7 +35,7 @@ impl Application {
     pub fn new(mut world: World) -> Self {
         let mut winit_window = WinitWindow::new();
         let event_loop: EventLoop<()> = winit_window.event_loop().unwrap();
-        let renderer_ash = RendererAsh::new(winit_window.rc_clone_window());
+        let renderer_ash = RendererAsh::new(winit_window.rc_clone_window()).unwrap();
         let app_window_ref = winit_window.rc_clone_window();
         //let renderer = VulkanoRenderer::new(winit_window.window().unwrap());
         // Create the input Consumer and keyboard handler

@@ -1,12 +1,11 @@
 
 use ash::vk;
+use anyhow::{anyhow, Result};
 //use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 //use winit::event_loop::{EventLoop, ControlFlow};
 
+use nalgebra::{Matrix4, Vector2, Vector3};
 use log;
-use nalgebra::{Vector2, Vector3};
-use nalgebra;
-use tobj::Model;
 
 use crate::adel_ecs::{System, World};
 // TODO: Create a prelude and add these to it
@@ -61,19 +60,19 @@ pub struct RendererAsh {
 }
 
 impl RendererAsh {
-    pub fn new(window: Rc<Window>) -> Self {
+    pub fn new(window: Rc<Window>) -> Result<Self> {
         // init vulkan stuff
-        let entry = unsafe { ash::Entry::load().expect("Error: Failed to create Ash Entry") };
-        let context = AshContext::new(&entry, &window);
-        let device = create_logical_device(&context, &VALIDATION_LAYERS.to_vec());
-        let swapchain = AshSwapchain::new(&context, &device, &window);
+        let entry = unsafe { ash::Entry::load()? };
+        let context = AshContext::new(&entry, &window)?;
+        let device = create_logical_device(&context, &VALIDATION_LAYERS.to_vec())?;
+        let swapchain = AshSwapchain::new(&context, &device, &window)?;
 
-        let pipeline = AshPipeline::new(&device, swapchain.format(), AshBuffers::get_depth_format(&context), swapchain.extent());
-        let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline);
+        let pipeline = AshPipeline::new(&device, swapchain.format(), AshBuffers::get_depth_format(&context)?, swapchain.extent())?;
+        let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline)?;
 
-        let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT);
+        let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
 
-        Self {
+        Ok(Self {
             _entry: entry,
             context,
             device,
@@ -89,18 +88,17 @@ impl RendererAsh {
             window,
             name: NAME,
             is_frame_started: false,
-        }
+        })
 
     }
     // Will be worth revisiting at a later time if splitting up draw_frame is desired
-    fn begin_frame(&mut self) -> ([vk::Fence; 1], u32, vk::CommandBuffer) {
+    fn begin_frame(&mut self) -> Result<([vk::Fence; 1], u32, vk::CommandBuffer)> {
         // Wait for the fences to clear prior to beginning the next render
         let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
 
         unsafe {
             self.device
-                .wait_for_fences(&wait_fences, true, std::u64::MAX)
-                .expect("Failed to wait for Fence!");
+                .wait_for_fences(&wait_fences, true, std::u64::MAX)?;
         }
 
         // May need to find out where to put this
@@ -122,22 +120,21 @@ impl RendererAsh {
                         //    self.recreate_swapchain();
                         //    return;
                         //}
-                        _ => panic!("Failed to acquire Swap Chain Image!"),
+                        _ => return Err(anyhow!("Failed to acquire Swap Chain Image!")),
                 },
             }
         };
         self.is_frame_started = true;
         // Set isFrameStarted to true
         // Get the command buffer from the vector that is equal to the current frame
-        let command_buffer = self.buffers.commandbuffers()[self.current_frame];
+        let command_buffer = self.buffers.command_buffers()[self.current_frame];
         let begin_info = vk::CommandBufferBeginInfo::default();
 
         unsafe {
             self.device.
-                begin_command_buffer(command_buffer, &begin_info)
-                .expect("ERROR: Failed to begin command buffer");
+                begin_command_buffer(command_buffer, &begin_info)?;
         }
-        (wait_fences, image_index, command_buffer)
+        Ok( (wait_fences, image_index, command_buffer) )
     }
     fn begin_swapchain_render_pass(&mut self, image_index: u32, command_buffer: &vk::CommandBuffer) {
         // BeginSwapcahinRenderPass
@@ -197,11 +194,10 @@ impl RendererAsh {
         }
     }
     // No need for references here as the resources are consumed at the end of the frame, and new ones will be generated next frame
-    fn end_frame(&mut self, image_index: u32, wait_fences: [vk::Fence; 1], command_buffer: vk::CommandBuffer) {
+    fn end_frame(&mut self, image_index: u32, wait_fences: [vk::Fence; 1], command_buffer: vk::CommandBuffer) -> Result<()> {
         unsafe {
             self.device
-                .end_command_buffer(command_buffer)
-                .expect("ERROR: Failed to end commandbuffer");
+                .end_command_buffer(command_buffer)?;
         }
 
         let wait_semaphores = [self.sync_objects.image_available_semaphores[self.current_frame]];
@@ -217,16 +213,14 @@ impl RendererAsh {
 
         unsafe {
             self.device
-                .reset_fences(&wait_fences)
-                .expect("Failed to reset Fence!");
+                .reset_fences(&wait_fences)?;
 
             self.device
                 .queue_submit(
                     self.swapchain.graphics_queue,
                     &submit_infos,
                     self.sync_objects.inflight_fences[self.current_frame],
-                )
-                .expect("Failed to execute queue submit.");
+                )?;
         }
 
         let swapchains = [self.swapchain.swapchain()];
@@ -246,7 +240,7 @@ impl RendererAsh {
             Ok(_) => self.is_framebuffer_resized,
             Err(vk_result) => match vk_result {
                 vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR => true,
-                _ => panic!("Failed to execute queue present."),
+                _ => return Err(anyhow!("Failed to execute queue present.")),
             },
         };
         if is_resized {
@@ -255,13 +249,16 @@ impl RendererAsh {
         }
         // isFrameStarted = true;
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+        Ok(())
     }
     // TODO: Break up this function
     //pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData)>) {
     //pub fn draw_frame(&mut self, buffers: Vec<&BufferComponent>) {
-    pub fn draw_frame(&mut self, models: Vec<&ModelComponent>, model_matrix: nalgebra::Matrix4::<f32>, proj: nalgebra::Matrix4::<f32>, view: nalgebra::Matrix4::<f32>) {
+    pub fn draw_frame(&mut self, models: Vec<&ModelComponent>, model_matrix: nalgebra::Matrix4::<f32>, proj: nalgebra::Matrix4::<f32>, view: nalgebra::Matrix4::<f32>
+        ) -> Result<()>
+    {
         // Begin_frame requires a return of Image_index, wait_fences and command_buffer
-        let (wait_fences, image_index, command_buffer) = self.begin_frame();
+        let (wait_fences, image_index, command_buffer) = self.begin_frame()?;
         self.begin_swapchain_render_pass(image_index, &command_buffer);
         // Render Objects
         //bind pipeline
@@ -301,7 +298,8 @@ impl RendererAsh {
         }
 
         self.end_swapchain_render_pass(&command_buffer);
-        self.end_frame(image_index, wait_fences, command_buffer);
+        self.end_frame(image_index, wait_fences, command_buffer)?;
+        Ok(())
     }
 
     fn recreate_swapchain(&mut self) {
@@ -341,8 +339,6 @@ impl RendererAsh {
 
 
 }
-use nalgebra::{Matrix2, Matrix3, Matrix4};
-use crate::adel_renderer::Transform2dComponent;
 pub fn create_push_constant_data_tmp(tmp : Matrix4<f32>) -> PushConstantData {
     PushConstantData {
         transform: tmp, //camera_projection,
@@ -361,7 +357,7 @@ impl System for RendererAsh {
             for mc in model_component_builder.iter() {
                 if let Some(component) = mc {
                     // TODO: Make Component Push fuction to account for None
-                    model_vec.push(Some(component.build(&self.context, &self.device, &self.buffers, self.pipeline.descriptor_set_layout())));
+                    model_vec.push(Some(component.build(&self.context, &self.device, &self.buffers, self.pipeline.descriptor_set_layout()).expect("Failed to build model")));
                 } else {
                     model_vec.push(None);
                 }
@@ -402,7 +398,7 @@ impl System for RendererAsh {
         for i in models.iter().enumerate() {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &mut transform_component[i.0] {
-                    transform.rotation.z += (0.25 * world.get_dt());
+                    transform.rotation.z += 0.25 * world.get_dt();
                     //transform.rotation.y -= (0.25 * world.get_dt());
                     model_matrix = transform.mat4_less_computation();
                     model_vec.push(buffer);

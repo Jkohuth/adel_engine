@@ -1,4 +1,5 @@
 use ash::vk;
+use anyhow::Result;
 use tobj;
 use std::path::Path;
 use std::fs::File;
@@ -147,17 +148,21 @@ impl ModelComponentBuilder {
         self.image_width = image_width;
         self.image_height = image_height;
     }
-    pub fn build(&self, context: &AshContext, device: &ash::Device, buffers: &AshBuffers, descriptor_set_layout: vk::DescriptorSetLayout) -> ModelComponent {
-        let (vertex_buffer, vertex_buffer_memory) = buffers.create_vertex_buffer(context, device, self.vertices.as_ref().unwrap());
-        let (index_buffer, index_buffer_memory) = buffers.create_index_buffer(context, device, self.indices.as_ref().unwrap());
-        let (texture_image, texture_image_memory) = buffers.create_texture_image(context, device, self.image_width, self.image_height, self.image_size, self.image_rgba.clone().unwrap());
-        let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image);
-        let texture_sampler = AshBuffers::create_texture_sample(device);
+    pub fn build(&self, context: &AshContext, device: &ash::Device, buffers: &AshBuffers, descriptor_set_layout: vk::DescriptorSetLayout
+        ) -> Result<ModelComponent>
+    {
+        let (vertex_buffer, vertex_buffer_memory) = buffers.create_vertex_buffer(context, device, self.vertices.as_ref().unwrap(), buffers.command_pool(), buffers.submit_queue())?;
+        let (index_buffer, index_buffer_memory) = buffers.create_index_buffer(context, device, self.indices.as_ref().unwrap(), buffers.command_pool(), buffers.submit_queue())?;
+        let (texture_image, texture_image_memory) = AshBuffers::create_texture_image(context, device, self.image_width, self.image_height, self.image_size,
+                 self.image_rgba.clone().unwrap(), buffers.command_pool(), buffers.submit_queue())?;
+        let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image)?;
+        let texture_sampler = AshBuffers::create_texture_sample(device)?;
 
-        let (uniform_buffers, uniform_buffers_memory) = AshBuffers::create_uniform_buffers(context, device);
-        let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout, &uniform_buffers, texture_image_view, texture_sampler);
+        let (uniform_buffers, uniform_buffers_memory) = AshBuffers::create_uniform_buffers(context, device)?;
+        let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout,
+                &uniform_buffers, texture_image_view, texture_sampler)?;
         //let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout, &uniform_buffers);
-        ModelComponent {
+        Ok(ModelComponent {
             vertex_buffer,
             vertex_buffer_memory,
             index_buffer,
@@ -170,6 +175,6 @@ impl ModelComponentBuilder {
             uniform_buffers,
             uniform_buffers_memory,
             descriptor_sets
-        }
+        })
     }
 }

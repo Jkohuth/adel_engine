@@ -1,4 +1,5 @@
 use ash::vk;
+use anyhow::Result;
 
 pub struct SyncObjects {
     pub image_available_semaphores: Vec<vk::Semaphore>,
@@ -10,7 +11,7 @@ impl SyncObjects {
     pub fn new(
         device: &ash::Device,
         max_frame_in_flight: usize
-    ) -> Self {
+    ) -> Result<Self> {
         let mut sync_objects = SyncObjects {
             image_available_semaphores: vec![],
             render_finished_semaphores: vec![],
@@ -27,14 +28,11 @@ impl SyncObjects {
         for _ in 0..max_frame_in_flight {
             unsafe {
                 let image_available_semaphore = device
-                    .create_semaphore(&semaphore_create_info, None)
-                    .expect("Failed to create Semaphore Object!");
+                    .create_semaphore(&semaphore_create_info, None)?;
                 let render_finished_semaphore = device
-                    .create_semaphore(&semaphore_create_info, None)
-                    .expect("Failed to create Semaphore Object!");
+                    .create_semaphore(&semaphore_create_info, None)?;
                 let inflight_fence = device
-                    .create_fence(&fence_create_info, None)
-                    .expect("Failed to create Fence Object!");
+                    .create_fence(&fence_create_info, None)?;
 
                 sync_objects
                     .image_available_semaphores
@@ -46,8 +44,9 @@ impl SyncObjects {
             }
         }
 
-        sync_objects
+        Ok(sync_objects)
     }
+
     pub unsafe fn cleanup_sync_objects(&mut self, device: &ash::Device, max_frames_in_flight: usize) {
             for i in 0..max_frames_in_flight {
                 device.destroy_semaphore(self.image_available_semaphores[i], None);

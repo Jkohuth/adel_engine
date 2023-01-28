@@ -1,4 +1,5 @@
 use ash::vk;
+use anyhow::Result;
 use winit::window::Window;
 use log;
 use super::structures::SurfaceInfo;
@@ -12,19 +13,19 @@ pub struct AshSwapchain {
 }
 impl AshSwapchain {
 
-    pub fn new(context: &AshContext, device: &ash::Device, window: &Window) -> Self {
+    pub fn new(context: &AshContext, device: &ash::Device, window: &Window) -> Result<Self> {
         let graphics_queue =
             unsafe { device.get_device_queue(context.queue_family.graphics_family.unwrap(), 0) };
         let present_queue =
             unsafe { device.get_device_queue(context.queue_family.present_family.unwrap(), 0) };
-        let swapchain_info = AshSwapchain::create_swapchain(context, device, window);
-        let image_views = AshSwapchain::create_swapchain_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
-        Self {
+        let swapchain_info = AshSwapchain::create_swapchain(context, device, window)?;
+        let image_views = AshSwapchain::create_swapchain_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images)?;
+        Ok(Self {
             graphics_queue,
             present_queue,
             swapchain_info,
             image_views
-        }
+        })
 
     }
     fn choose_swapchain_format(
@@ -58,7 +59,10 @@ impl AshSwapchain {
                     vk::PresentModeKHR::FIFO => 1,
                     vk::PresentModeKHR::FIFO_RELAXED => 2,
                     vk::PresentModeKHR::IMMEDIATE => 3,
-                    _ => panic!("ERROR: Unknown present mode found {:?}", present_mode)
+                    _ => {
+                        log::warn!("Unknown present mode found {:?}", present_mode);
+                        999
+                    }
         }).unwrap();
         //log::info!("Present mode: {:?}", &available_present_mode);
         *available_present_mode
@@ -76,7 +80,7 @@ impl AshSwapchain {
             let window_size = window
                 .inner_size();
             log::info!(
-                "\t\tInner Window Size: ({}, {})",
+                "Inner Window Size: ({}, {})",
                 window_size.width, window_size.height
             );
 
@@ -99,8 +103,8 @@ impl AshSwapchain {
         context: &AshContext,
         device: &ash::Device,
         window: &winit::window::Window,
-    ) -> SwapChainInfo {
-        let swapchain_support = query_swapchain_support(context.physical_device, &context.surface_info);
+    ) -> Result<SwapChainInfo> {
+        let swapchain_support = query_swapchain_support(context.physical_device, &context.surface_info)?;
 
         let surface_format = AshSwapchain::choose_swapchain_format(&swapchain_support.formats);
         let present_mode = AshSwapchain::choose_swapchain_present_mode(&swapchain_support.present_modes);
@@ -143,30 +147,29 @@ impl AshSwapchain {
         let swapchain_loader = ash::extensions::khr::Swapchain::new(&context.instance, device);
         let swapchain = unsafe {
             swapchain_loader
-                .create_swapchain(&swapchain_create_info, None)
-                .expect("ERROR: Failed to create swapchain")
+                .create_swapchain(&swapchain_create_info, None)?
         };
         let swapchain_images = unsafe {
             swapchain_loader
-                .get_swapchain_images(swapchain)
-                .expect("ERROR: Failed to get swapchain images")
+                .get_swapchain_images(swapchain)?
         };
 
-        SwapChainInfo {
+        Ok(SwapChainInfo {
             swapchain_loader,
             swapchain,
             swapchain_format: surface_format.format,
             swapchain_extent: extent,
             swapchain_images,
-        }
+        })
     }
+
     fn create_swapchain_image_views(
         device: &ash::Device,
         surface_format: vk::Format,
         images: &Vec<vk::Image>,
-    ) -> Vec<vk::ImageView> {
-        let images_views: Vec<vk::ImageView> = images.iter()
-            .map(|&image| {
+    ) -> Result<Vec<vk::ImageView>> {
+        let image_views: Result<Vec<vk::ImageView>> = images.iter()
+            .map(|&image| -> Result<vk::ImageView> {
                 AshSwapchain::create_image_view(
                     device,
                     image,
@@ -175,8 +178,7 @@ impl AshSwapchain {
                     1
                 )
             }).collect();
-
-        images_views
+        image_views
     }
     pub fn create_image_view(
         device: &ash::Device,
@@ -184,7 +186,7 @@ impl AshSwapchain {
         format: vk::Format,
         aspect_flags: vk::ImageAspectFlags,
         mip_levels: u32,
-    ) -> vk::ImageView {
+    ) -> Result<vk::ImageView> {
         let image_view_info = vk::ImageViewCreateInfo::builder()
             .image(image)
             .view_type(vk::ImageViewType::TYPE_2D)
@@ -205,18 +207,22 @@ impl AshSwapchain {
             .build();
 
 
-        unsafe {
+        let image_view =unsafe {
             device
-                .create_image_view(&image_view_info, None)
-                .expect("Failed to create Image View!")
-        }
+                .create_image_view(&image_view_info, None)?
+        };
+
+        Ok(image_view)
     }
 
-    pub fn recreate_swapchain(&mut self, context: &AshContext, device: &ash::Device, window: &Window) {
-        let swapchain_info = AshSwapchain::create_swapchain(context, device, window);
-        let image_views = AshSwapchain::create_swapchain_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images);
+    pub fn recreate_swapchain(&mut self, context: &AshContext, device: &ash::Device, window: &Window) -> Result<()> {
+        let swapchain_info = AshSwapchain::create_swapchain(context, device, window)?;
+        let image_views = AshSwapchain::create_swapchain_image_views(&device, swapchain_info.swapchain_format, &swapchain_info.swapchain_images)?;
         self.swapchain_info = swapchain_info;
         self.image_views = image_views;
+
+        // Returns empty result indicating that internal functions were successful
+        Ok(())
     }
 
     pub unsafe fn destroy_swapchain(&mut self, device: &ash::Device) {
@@ -249,26 +255,23 @@ impl AshSwapchain {
 pub fn query_swapchain_support(
     physical_device: vk::PhysicalDevice,
     surface_info: &SurfaceInfo,
-) -> SwapChainSupportDetail {
+) -> Result<SwapChainSupportDetail> {
     unsafe {
         let capabilities = surface_info
             .surface_loader
-            .get_physical_device_surface_capabilities(physical_device, surface_info.surface)
-            .expect("Failed to query for surface capabilities.");
+            .get_physical_device_surface_capabilities(physical_device, surface_info.surface)?;
         let formats = surface_info
             .surface_loader
-            .get_physical_device_surface_formats(physical_device, surface_info.surface)
-            .expect("Failed to query for surface formats.");
+            .get_physical_device_surface_formats(physical_device, surface_info.surface)?;
         let present_modes = surface_info
             .surface_loader
-            .get_physical_device_surface_present_modes(physical_device, surface_info.surface)
-            .expect("Failed to query for surface present mode.");
+            .get_physical_device_surface_present_modes(physical_device, surface_info.surface)?;
 
-        SwapChainSupportDetail {
+        Ok(SwapChainSupportDetail {
             capabilities,
             formats,
             present_modes,
-        }
+        })
     }
 }
 

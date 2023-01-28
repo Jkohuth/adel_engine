@@ -1,4 +1,5 @@
 use ash::vk;
+use anyhow::Result;
 use std::ffi::CStr;
 use std::os::raw::c_void;
 use std::ptr;
@@ -7,21 +8,20 @@ pub fn setup_debug_utils(
     is_enable_debug: bool,
     entry: &ash::Entry,
     instance: &ash::Instance,
-) -> (ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT) {
+) -> Result<(ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT)> {
     let debug_utils_loader = ash::extensions::ext::DebugUtils::new(entry, instance);
 
     if is_enable_debug == false {
-        (debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null())
+        return Ok( (debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null()) )
     } else {
         let messenger_ci = populate_debug_messenger_create_info();
 
         let utils_messenger = unsafe {
             debug_utils_loader
-                .create_debug_utils_messenger(&messenger_ci, None)
-                .expect("Debug Utils Callback")
+                .create_debug_utils_messenger(&messenger_ci, None)?
         };
 
-        (debug_utils_loader, utils_messenger)
+        Ok( (debug_utils_loader, utils_messenger) )
     }
 }
 
