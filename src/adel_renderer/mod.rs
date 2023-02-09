@@ -1,5 +1,5 @@
-pub mod utility;
 mod renderer;
+pub mod utility;
 
 pub mod definitions;
 pub use definitions::*;

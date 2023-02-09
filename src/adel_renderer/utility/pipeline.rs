@@ -1,8 +1,8 @@
-use ash::vk;
+use crate::adel_renderer::definitions::Vertex;
 use anyhow::Result;
-use std::ffi::CString;
+use ash::vk;
 use inline_spirv::include_spirv;
-use crate::adel_renderer::definitions::{Vertex};
+use std::ffi::CString;
 
 pub struct AshPipeline {
     render_pass: vk::RenderPass,
@@ -13,22 +13,36 @@ pub struct AshPipeline {
 }
 
 impl AshPipeline {
-    pub fn new(device: &ash::Device, surface_format: vk::Format, depth_format: vk::Format, extent: vk::Extent2D) -> Result<Self> {
+    pub fn new(
+        device: &ash::Device,
+        surface_format: vk::Format,
+        depth_format: vk::Format,
+        extent: vk::Extent2D,
+    ) -> Result<Self> {
         let render_pass = AshPipeline::create_render_pass(&device, surface_format, depth_format)?;
         let descriptor_set_layout = AshPipeline::create_descriptor_set_layout(&device)?;
         let pipeline_layout = AshPipeline::create_pipeline_layout(&device, descriptor_set_layout)?;
-        let graphics_pipeline = AshPipeline::create_graphics_pipeline(&device, render_pass.clone(), pipeline_layout, extent)?;
+        let graphics_pipeline = AshPipeline::create_graphics_pipeline(
+            &device,
+            render_pass.clone(),
+            pipeline_layout,
+            extent,
+        )?;
         //let (graphics_pipeline, pipeline_layout) = AshPipeline::create_graphics_pipeline(&device, render_pass.clone(), descriptor_set_layout, extent);
         Ok(Self {
             render_pass,
             descriptor_set_layout,
             graphics_pipeline,
             pipeline_layout,
-            depth_format
+            depth_format,
         })
     }
 
-    pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format, depth_format: vk::Format) -> Result<vk::RenderPass> {
+    pub fn create_render_pass(
+        device: &ash::Device,
+        surface_format: vk::Format,
+        depth_format: vk::Format,
+    ) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription::builder()
             .format(surface_format)
             .flags(vk::AttachmentDescriptionFlags::empty())
@@ -52,7 +66,6 @@ impl AshPipeline {
             .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
             .build();
 
-
         let color_attachment_ref = vk::AttachmentReference::builder()
             .attachment(0)
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
@@ -74,16 +87,21 @@ impl AshPipeline {
         let subpass_dependencies = [vk::SubpassDependency::builder()
             .src_subpass(vk::SUBPASS_EXTERNAL)
             .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
-                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
-                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
+            .src_stage_mask(
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+            )
+            .dst_stage_mask(
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+            )
             .src_access_mask(vk::AccessFlags::empty())
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE
-                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            )
             .dependency_flags(vk::DependencyFlags::empty())
             .build()];
-
 
         let renderpass_create_info = vk::RenderPassCreateInfo::builder()
             .attachments(&render_pass_attachments)
@@ -91,12 +109,8 @@ impl AshPipeline {
             .dependencies(&subpass_dependencies)
             .build();
 
-        let render_pass = unsafe {
-            device
-                .create_render_pass(&renderpass_create_info, None)?
-        };
+        let render_pass = unsafe { device.create_render_pass(&renderpass_create_info, None)? };
         Ok(render_pass)
-
     }
 
     #[allow(dead_code)]
@@ -111,10 +125,8 @@ impl AshPipeline {
         let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
             .bindings(bindings)
             .build();
-        let descriptor_set_layout = unsafe {
-            device
-                .create_descriptor_set_layout(&descriptor_layout_info, None)?
-        };
+        let descriptor_set_layout =
+            unsafe { device.create_descriptor_set_layout(&descriptor_layout_info, None)? };
         Ok(descriptor_set_layout)
     }
     fn create_descriptor_set_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
@@ -134,14 +146,15 @@ impl AshPipeline {
         let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
             .bindings(bindings)
             .build();
-        let descriptor_set_layout = unsafe {
-            device
-                .create_descriptor_set_layout(&descriptor_layout_info, None)?
-        };
+        let descriptor_set_layout =
+            unsafe { device.create_descriptor_set_layout(&descriptor_layout_info, None)? };
 
         Ok(descriptor_set_layout)
     }
-    fn create_pipeline_layout(device: &ash::Device, descriptor_set_layout: vk::DescriptorSetLayout) -> Result<vk::PipelineLayout> {
+    fn create_pipeline_layout(
+        device: &ash::Device,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+    ) -> Result<vk::PipelineLayout> {
         //let push_constant_range = [vk::PushConstantRange::builder()
         //    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
         //    .offset(0)
@@ -149,24 +162,20 @@ impl AshPipeline {
         //    .build()];
         let set_layouts = [descriptor_set_layout];
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
-        //    .push_constant_ranges(&push_constant_range)
+            //    .push_constant_ranges(&push_constant_range)
             .set_layouts(&set_layouts)
             .build();
 
-        let pipeline_layout = unsafe {
-            device
-                .create_pipeline_layout(&pipeline_layout_create_info, None)?
-        };
+        let pipeline_layout =
+            unsafe { device.create_pipeline_layout(&pipeline_layout_create_info, None)? };
         Ok(pipeline_layout)
     }
     fn create_shader_module(device: &ash::Device, code: &[u32]) -> Result<vk::ShaderModule> {
         let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(&code).build();
 
         // Call to graphics card to build shader
-        let shader_module = unsafe {
-            device
-                .create_shader_module(&shader_module_create_info, None)?
-        };
+        let shader_module =
+            unsafe { device.create_shader_module(&shader_module_create_info, None)? };
         Ok(shader_module)
     }
 
@@ -176,14 +185,23 @@ impl AshPipeline {
         pipeline_layout: vk::PipelineLayout,
         swapchain_extent: vk::Extent2D,
     ) -> Result<vk::Pipeline> {
-
         // Create Shader Modules
         //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.vert", vert, glsl, entry="main");
         //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.frag", frag, glsl, entry="main");
         //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/uniform_buffer.vert", vert, glsl, entry="main");
         //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/uniform_buffer.frag", frag, glsl, entry="main");
-        let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/texture.vert", vert, glsl, entry="main");
-        let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/texture.frag", frag, glsl, entry="main");
+        let vert_spv: &'static [u32] = include_spirv!(
+            "src/adel_renderer/shaders/texture.vert",
+            vert,
+            glsl,
+            entry = "main"
+        );
+        let frag_spv: &'static [u32] = include_spirv!(
+            "src/adel_renderer/shaders/texture.frag",
+            frag,
+            glsl,
+            entry = "main"
+        );
         let vert_shader = AshPipeline::create_shader_module(&device, vert_spv)?;
         let frag_shader = AshPipeline::create_shader_module(&device, frag_spv)?;
 
@@ -199,7 +217,7 @@ impl AshPipeline {
                 .module(frag_shader)
                 .name(&main_function_name)
                 .stage(vk::ShaderStageFlags::FRAGMENT)
-                .build()
+                .build(),
         ];
         let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(&Vertex::binding_descriptions())
@@ -218,12 +236,10 @@ impl AshPipeline {
             .height(swapchain_extent.height as f32)
             .min_depth(0.0)
             .max_depth(1.0)
-            .build()
-        ];
+            .build()];
 
         let scissors = [vk::Rect2D::builder()
-            .offset(vk::Offset2D::builder()
-                        .x(0).y(0).build())
+            .offset(vk::Offset2D::builder().x(0).y(0).build())
             .extent(swapchain_extent)
             .build()];
 
@@ -250,12 +266,12 @@ impl AshPipeline {
             .build();
 
         let multisample_state_create_info = vk::PipelineMultisampleStateCreateInfo::builder()
-                .rasterization_samples(vk::SampleCountFlags::TYPE_1)
-                .sample_shading_enable(false)
-                .min_sample_shading(0.0)
-                .alpha_to_coverage_enable(false)
-                .alpha_to_one_enable(false)
-                .build();
+            .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+            .sample_shading_enable(false)
+            .min_sample_shading(0.0)
+            .alpha_to_coverage_enable(false)
+            .alpha_to_one_enable(false)
+            .build();
 
         let stencil_state = vk::StencilOpState::builder()
             .fail_op(vk::StencilOp::KEEP)
@@ -288,8 +304,7 @@ impl AshPipeline {
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
             .alpha_blend_op(vk::BlendOp::ADD)
-            .build()
-        ];
+            .build()];
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
@@ -317,8 +332,7 @@ impl AshPipeline {
             .subpass(0)
             .base_pipeline_handle(vk::Pipeline::null())
             .base_pipeline_index(-1)
-            .build()
-        ];
+            .build()];
 
         log::info!("Creating the graphics pipeline");
         let graphics_pipelines = unsafe {
@@ -327,7 +341,8 @@ impl AshPipeline {
                     vk::PipelineCache::null(),
                     &graphic_pipeline_create_infos,
                     None,
-                ).expect("Failed to create Graphics Pipeline")
+                )
+                .expect("Failed to create Graphics Pipeline")
         };
         log::info!("Created Graphics pipeline");
         unsafe {
@@ -362,7 +377,6 @@ impl AshPipeline {
     }
     pub unsafe fn destroy_pipeline(&mut self, device: &ash::Device) {
         device.destroy_pipeline(self.graphics_pipeline, None);
-        device
-            .destroy_pipeline_layout(self.pipeline_layout, None);
+        device.destroy_pipeline_layout(self.pipeline_layout, None);
     }
 }

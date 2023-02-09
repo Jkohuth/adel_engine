@@ -1,14 +1,14 @@
-use ash::vk;
+use crate::adel_renderer::definitions::Vertex;
+use crate::adel_renderer::utility::{buffers::AshBuffers, context::AshContext};
 use anyhow::Result;
-use tobj;
-use std::path::Path;
+use ash::vk;
+use image::{DynamicImage, RgbaImage};
+use nalgebra::{Vector2, Vector3};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
-use std::collections::HashMap;
-use crate::adel_renderer::definitions::{Vertex};
-use crate::adel_renderer::utility::{context::AshContext, buffers::AshBuffers};
-use nalgebra::{Vector2, Vector3};
-use image::{RgbaImage, DynamicImage};
+use std::path::Path;
+use tobj;
 
 pub struct ModelComponent {
     pub vertex_buffer: vk::Buffer,
@@ -44,7 +44,6 @@ impl ModelComponent {
             }
         }
     }
-
 }
 
 pub struct ModelComponentBuilder {
@@ -61,12 +60,12 @@ pub struct ModelComponentBuilder {
 impl ModelComponentBuilder {
     pub fn new() -> Self {
         Self {
-            vertices:     None,
-            indices:      None,
+            vertices: None,
+            indices: None,
             image_object: None,
-            image_rgba:   None,
-            image_size:   0,
-            image_width:  0,
+            image_rgba: None,
+            image_size: 0,
+            image_width: 0,
             image_height: 0,
         }
     }
@@ -83,12 +82,13 @@ impl ModelComponentBuilder {
                 ..Default::default()
             },
             |_| Ok(Default::default()),
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut unique_vertices = HashMap::new();
         for model in &models {
             // Position
-            for (i, index ) in model.mesh.indices.iter().enumerate() {
+            for (i, index) in model.mesh.indices.iter().enumerate() {
                 let pos_offset = (3 * index) as usize;
                 let normal_offset = (3 * model.mesh.normal_indices[i]) as usize;
                 let uv_offset = (2 * model.mesh.texcoord_indices[i]) as usize;
@@ -96,15 +96,18 @@ impl ModelComponentBuilder {
                 let mut vertex_builder = Vertex::builder()
                     .position(Vector3::new(
                         model.mesh.positions[pos_offset],
-                        model.mesh.positions[pos_offset+1],
-                        model.mesh.positions[pos_offset+2]))
+                        model.mesh.positions[pos_offset + 1],
+                        model.mesh.positions[pos_offset + 2],
+                    ))
                     .normal(Vector3::new(
                         model.mesh.normals[normal_offset],
-                        model.mesh.normals[normal_offset+1],
-                        model.mesh.normals[normal_offset+2]))
+                        model.mesh.normals[normal_offset + 1],
+                        model.mesh.normals[normal_offset + 2],
+                    ))
                     .uv(Vector2::new(
                         model.mesh.texcoords[uv_offset],
-                        model.mesh.texcoords[uv_offset +1]));
+                        model.mesh.texcoords[uv_offset + 1],
+                    ));
 
                 // Confirm if Vertex Colors were supplied for this Model, if not builder will set them to default
                 if model.mesh.vertex_color.len() > 0 {
@@ -112,7 +115,8 @@ impl ModelComponentBuilder {
                     vertex_builder = vertex_builder.color(Vector3::new(
                         model.mesh.vertex_color[color_offset + 0],
                         model.mesh.vertex_color[color_offset + 1],
-                        model.mesh.vertex_color[color_offset + 2]));
+                        model.mesh.vertex_color[color_offset + 2],
+                    ));
                 }
 
                 let vertex = vertex_builder.build();
@@ -129,10 +133,8 @@ impl ModelComponentBuilder {
         }
         self.vertices = Some(vertices);
         self.indices = Some(indices);
-
     }
     pub fn load_texture(&mut self, image_path: &Path) {
-
         let mut image_object: DynamicImage = image::open(image_path).unwrap();
         image_object = image_object.flipv();
         let (image_width, image_height) = (image_object.width(), image_object.height());
@@ -148,19 +150,50 @@ impl ModelComponentBuilder {
         self.image_width = image_width;
         self.image_height = image_height;
     }
-    pub fn build(&self, context: &AshContext, device: &ash::Device, buffers: &AshBuffers, descriptor_set_layout: vk::DescriptorSetLayout
-        ) -> Result<ModelComponent>
-    {
-        let (vertex_buffer, vertex_buffer_memory) = buffers.create_vertex_buffer(context, device, self.vertices.as_ref().unwrap(), buffers.command_pool(), buffers.submit_queue())?;
-        let (index_buffer, index_buffer_memory) = buffers.create_index_buffer(context, device, self.indices.as_ref().unwrap(), buffers.command_pool(), buffers.submit_queue())?;
-        let (texture_image, texture_image_memory) = AshBuffers::create_texture_image(context, device, self.image_width, self.image_height, self.image_size,
-                 self.image_rgba.clone().unwrap(), buffers.command_pool(), buffers.submit_queue())?;
+    pub fn build(
+        &self,
+        context: &AshContext,
+        device: &ash::Device,
+        buffers: &AshBuffers,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+    ) -> Result<ModelComponent> {
+        let (vertex_buffer, vertex_buffer_memory) = buffers.create_vertex_buffer(
+            context,
+            device,
+            self.vertices.as_ref().unwrap(),
+            buffers.command_pool(),
+            buffers.submit_queue(),
+        )?;
+        let (index_buffer, index_buffer_memory) = buffers.create_index_buffer(
+            context,
+            device,
+            self.indices.as_ref().unwrap(),
+            buffers.command_pool(),
+            buffers.submit_queue(),
+        )?;
+        let (texture_image, texture_image_memory) = AshBuffers::create_texture_image(
+            context,
+            device,
+            self.image_width,
+            self.image_height,
+            self.image_size,
+            self.image_rgba.clone().unwrap(),
+            buffers.command_pool(),
+            buffers.submit_queue(),
+        )?;
         let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image)?;
         let texture_sampler = AshBuffers::create_texture_sample(device)?;
 
-        let (uniform_buffers, uniform_buffers_memory) = AshBuffers::create_uniform_buffers(context, device)?;
-        let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout,
-                &uniform_buffers, texture_image_view, texture_sampler)?;
+        let (uniform_buffers, uniform_buffers_memory) =
+            AshBuffers::create_uniform_buffers(context, device)?;
+        let descriptor_sets = AshBuffers::create_descriptor_sets(
+            device,
+            buffers.descriptor_pool,
+            descriptor_set_layout,
+            &uniform_buffers,
+            texture_image_view,
+            texture_sampler,
+        )?;
         //let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout, &uniform_buffers);
         Ok(ModelComponent {
             vertex_buffer,
@@ -174,7 +207,7 @@ impl ModelComponentBuilder {
             texture_sampler,
             uniform_buffers,
             uniform_buffers_memory,
-            descriptor_sets
+            descriptor_sets,
         })
     }
 }

@@ -1,12 +1,11 @@
-use std::collections::HashSet;
-use winit::{
-        event::{VirtualKeyCode},
-};
-use crate::adel_input::InputConsumer;
 use crate::adel_ecs::{System, World};
+use crate::adel_input::InputConsumer;
+use std::collections::HashSet;
+use winit::event::VirtualKeyCode;
+use winit::window::Window;
 
 use crate::adel_camera::Camera;
-use crate::adel_renderer::definitions::{TransformComponent};
+use crate::adel_renderer::definitions::TransformComponent;
 // This class will be a struct that contains the current input variables
 // Which keys and which state shall be contained in this class
 // Other Classes need to reference this class in order to update accordingly
@@ -26,11 +25,10 @@ impl KeyboardHandler {
             name: "KeyboardHandler",
         }
     }
-
 }
 
 impl System for KeyboardHandler {
-    fn startup(&mut self, _world: &mut World) {
+    fn startup(&mut self, world: &mut World) {
         /* Window object should be a world resource so it can be gotten anywhere
         let input_ref = world.borrow_component::<KeyboardComponent>().unwrap();
         let mut transform_ref = world.borrow_component_mut::<TransformComponent>().unwrap();
@@ -45,7 +43,17 @@ impl System for KeyboardHandler {
                     //camera.set_orthographic_projection(-1.0, 1.0, 1.0, -1.0, -1.0, 10.0);
                 }
             }
-        } */
+        }*/
+        let window = world.get_resource::<Window>().unwrap();
+        let mut camera = world.get_resource_mut::<Camera>().unwrap();
+        let dims = window.inner_size();
+        let aspect_ratio = dims.width as f32 / dims.height as f32;
+        camera.set_perspective_projection((50.0f32).to_radians(), aspect_ratio, 0.1, 10.0);
+        camera.set_view_target(
+            nalgebra::Vector3::<f32>::new(2.0, 2.0, 2.0),
+            nalgebra::Vector3::<f32>::new(0.0, 0.0, 0.0),
+            Some(nalgebra::Vector3::<f32>::new(0.0, 0.0, 1.0)),
+        );
     }
 
     fn run(&mut self, world: &mut World) {
@@ -63,7 +71,6 @@ impl System for KeyboardHandler {
             // _input_entity is used to track that this entity at this position in the Component Array exists
             if let Some(_input_entity) = i.1 {
                 if let Some(camera_transform) = &mut transform_ref[i.0] {
-
                     //move_2d_object(&input_consumer.pressed, world.get_dt(), transform);
                     //camera.set_orthographic_projection_pos(1.0, 1.0, 10.0);
                     //log::info!("Camera Info Position: {:?}\nProjection: {:?}", camera_transform, camera.get_projection());
@@ -72,7 +79,6 @@ impl System for KeyboardHandler {
                     move_in_plane_xz(&input_consumer.pressed, world.get_dt(), camera_transform);
                     //log::info!("Post move camera_transform {:?} dt {:?}", &camera_transform, world.get_dt());
                     camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
-
                 }
             }
         }
@@ -87,7 +93,7 @@ impl System for KeyboardHandler {
 static LOOK_SPEED: f32 = 1.5;
 static MOVE_SPEED: f32 = 3.0;
 
-use nalgebra::{Vector3};
+use nalgebra::Vector3;
 #[allow(dead_code)]
 fn move_2d_object(keys: &HashSet<VirtualKeyCode>, dt: f32, transform: &mut TransformComponent) {
     let mut move_dir = Vector3::default();
@@ -109,8 +115,11 @@ fn move_2d_object(keys: &HashSet<VirtualKeyCode>, dt: f32, transform: &mut Trans
     }
 }
 
-fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &mut TransformComponent) {
-
+fn move_in_plane_xz(
+    keys: &HashSet<VirtualKeyCode>,
+    dt: f32,
+    camera_transform: &mut TransformComponent,
+) {
     let mut rotate = Vector3::new(0.0, 0.0, 0.0);
     // Look Right
     if keys.contains(&VirtualKeyCode::Right) {
@@ -134,7 +143,7 @@ fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &
 
     // This is kinda dumb, look into making it more elegant
     camera_transform.rotation.x = camera_transform.rotation.x.clamp(-1.5, 1.5);
-    camera_transform.rotation.y = camera_transform.rotation.y % (2.0*std::f32::consts::PI);
+    camera_transform.rotation.y = camera_transform.rotation.y % (2.0 * std::f32::consts::PI);
 
     let yaw = camera_transform.rotation.y;
     let forward_dir = Vector3::new(yaw.sin(), 0.0, yaw.cos());
@@ -169,5 +178,4 @@ fn move_in_plane_xz(keys: &HashSet<VirtualKeyCode>, dt: f32, camera_transform: &
     if Vector3::dot(&move_dir, &move_dir) > f32::EPSILON {
         camera_transform.translation += MOVE_SPEED * dt * move_dir.normalize();
     }
-
 }

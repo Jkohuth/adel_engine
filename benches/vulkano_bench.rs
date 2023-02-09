@@ -1,17 +1,12 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use adel::window;
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 pub fn window_benchmark(c: &mut Criterion) {
-    c.bench_function("adel_window", |b| 
-        b.iter(|| {  
-            window::WinitWindow::new()
-        })
-    );
+    c.bench_function("adel_window", |b| b.iter(|| window::WinitWindow::new()));
 }
 
 criterion_group!(benches, window_benchmark);
 criterion_main!(benches);
-
 
 /*
 Criterion Notes for future Benchmarking
