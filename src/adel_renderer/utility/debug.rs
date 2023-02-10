@@ -1,3 +1,4 @@
+use anyhow::Result;
 use ash::vk;
 use std::ffi::CStr;
 use std::os::raw::c_void;
@@ -7,21 +8,18 @@ pub fn setup_debug_utils(
     is_enable_debug: bool,
     entry: &ash::Entry,
     instance: &ash::Instance,
-) -> (ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT) {
+) -> Result<(ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT)> {
     let debug_utils_loader = ash::extensions::ext::DebugUtils::new(entry, instance);
 
     if is_enable_debug == false {
-        (debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null())
+        return Ok((debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null()));
     } else {
         let messenger_ci = populate_debug_messenger_create_info();
 
-        let utils_messenger = unsafe {
-            debug_utils_loader
-                .create_debug_utils_messenger(&messenger_ci, None)
-                .expect("Debug Utils Callback")
-        };
+        let utils_messenger =
+            unsafe { debug_utils_loader.create_debug_utils_messenger(&messenger_ci, None)? };
 
-        (debug_utils_loader, utils_messenger)
+        Ok((debug_utils_loader, utils_messenger))
     }
 }
 
@@ -37,7 +35,11 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
         vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION => "[Validation]",
         _ => "[Unknown]",
     };
-    let message = CStr::from_ptr((*p_callback_data).p_message).to_str().unwrap().trim_start().trim_end();
+    let message = CStr::from_ptr((*p_callback_data).p_message)
+        .to_str()
+        .unwrap()
+        .trim_start()
+        .trim_end();
     match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => {
             log::error!("Vulkan Debug Callback: Type: {}, Msg: {:?}", types, message);
@@ -52,7 +54,11 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
             log::debug!("Vulkan Debug Callback: Type: {}, {:?}", types, message);
         }
         _ => {
-            log::debug!("[UNKNOWN] Vulkan Debug Callback: Type: {}, {:?}", types, message);
+            log::debug!(
+                "[UNKNOWN] Vulkan Debug Callback: Type: {}, {:?}",
+                types,
+                message
+            );
         }
     }
     vk::FALSE
@@ -66,9 +72,9 @@ pub fn populate_debug_messenger_create_info() -> vk::DebugUtilsMessengerCreateIn
             //vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE |
             vk::DebugUtilsMessageSeverityFlagsEXT::INFO |
             vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
-        message_type:  vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+        message_type: vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
             | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
-            //| vk::DebugUtilsMessageTypeFlagsEXT::GENERAL,
+        //| vk::DebugUtilsMessageTypeFlagsEXT::GENERAL,
         pfn_user_callback: Some(vulkan_debug_utils_callback),
         p_user_data: ptr::null_mut(),
     }

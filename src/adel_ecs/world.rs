@@ -1,6 +1,6 @@
-use std::cell::{Ref, RefCell, RefMut };
-use std::any::TypeId;
 use crate::adel_tools::print_type_of;
+use std::any::TypeId;
+use std::cell::{Ref, RefCell, RefMut};
 
 #[allow(unused_imports)]
 use std::collections::HashMap;
@@ -38,7 +38,6 @@ pub trait Resource {
 }
 
 impl<T: 'static> Resource for RefCell<T> {
-
     fn resource_as(&self) -> &dyn std::any::Any {
         self as &dyn std::any::Any
     }
@@ -73,7 +72,6 @@ impl World {
         entity_id
     }
 
-
     pub fn add_component_to_entity<ComponentType: 'static>(
         &mut self,
         entity: usize,
@@ -81,7 +79,8 @@ impl World {
     ) {
         // Iterate through all of the available components until one matches the provided componentType
         for component_vec in self.components.iter_mut() {
-            if let Some(component_vec) = component_vec.component_as_any_mut()
+            if let Some(component_vec) = component_vec
+                .component_as_any_mut()
                 .downcast_mut::<RefCell<Vec<Option<ComponentType>>>>()
             {
                 // For that Component Vector make an entry switch None for Some at location EntityId
@@ -103,24 +102,37 @@ impl World {
         self.components.push(Box::new(RefCell::new(new_component)));
     }
     // Creates a function to insert an existing component Vector into World
-    pub fn insert_component<ComponentType: 'static>(&mut self, component: Vec<Option<ComponentType>>) {
+    pub fn insert_component<ComponentType: 'static>(
+        &mut self,
+        component: Vec<Option<ComponentType>>,
+    ) {
         // All the component Vectors need to be the same length, if we have a mismatched number of entities, fail
         // Note: Arrays indexed at 0
-        assert_eq!(self.entities_count, component.len() );
+        assert_eq!(self.entities_count, component.len());
         self.components.push(Box::new(RefCell::new(component)));
     }
-    pub fn borrow_component_mut<ComponentType: 'static>(&self) -> Option<RefMut<Vec<Option<ComponentType>>>> {
+    pub fn borrow_component_mut<ComponentType: 'static>(
+        &self,
+    ) -> Option<RefMut<Vec<Option<ComponentType>>>> {
         for component_vec in self.components.iter() {
-            if let Some(component_vec) = component_vec.component_as_any().downcast_ref::<RefCell<Vec<Option<ComponentType>>>>() {
-                return Some(component_vec.borrow_mut())
+            if let Some(component_vec) = component_vec
+                .component_as_any()
+                .downcast_ref::<RefCell<Vec<Option<ComponentType>>>>()
+            {
+                return Some(component_vec.borrow_mut());
             }
         }
         None
     }
-    pub fn borrow_component<ComponentType: 'static>(&self) -> Option<Ref<Vec<Option<ComponentType>>>> {
+    pub fn borrow_component<ComponentType: 'static>(
+        &self,
+    ) -> Option<Ref<Vec<Option<ComponentType>>>> {
         for component_vec in self.components.iter() {
-            if let Some(component_vec) = component_vec.component_as_any().downcast_ref::<RefCell<Vec<Option<ComponentType>>>>() {
-                return Some(component_vec.borrow())
+            if let Some(component_vec) = component_vec
+                .component_as_any()
+                .downcast_ref::<RefCell<Vec<Option<ComponentType>>>>()
+            {
+                return Some(component_vec.borrow());
             }
         }
         None
@@ -147,14 +159,14 @@ impl World {
     }
     pub fn get_resource_mut<R: 'static>(&self) -> Option<RefMut<R>> {
         let type_id = TypeId::of::<R>();
-        let box_resource = match self.resources.get(&type_id){
+        let box_resource = match self.resources.get(&type_id) {
             Some(box_resource) => box_resource,
             None => {
                 log::info!("ERROR: No resource found {:?}", print_type_of(&type_id));
                 return None;
             }
         };
-        if let Some(resource) =  box_resource.resource_as().downcast_ref::<RefCell<R>>() {
+        if let Some(resource) = box_resource.resource_as().downcast_ref::<RefCell<R>>() {
             return Some(resource.borrow_mut());
         } else {
             //log::info!("Failed to Downcast Value Mut");

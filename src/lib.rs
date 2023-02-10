@@ -2,9 +2,8 @@ mod adel_app;
 mod adel_camera;
 mod adel_ecs;
 mod adel_input;
-//mod adel_renderer;
 mod adel_physics;
-mod adel_renderer_ash;
+mod adel_renderer;
 mod adel_tools;
 mod adel_winit;
 
@@ -20,19 +19,15 @@ pub mod ecs {
 pub mod input {
     pub use crate::adel_input::*;
 }
-//pub mod renderer {
-//    pub use crate::adel_renderer::*;
-//}
 pub mod physics {
     pub use crate::adel_physics::*;
 }
-pub mod renderer_ash {
-    pub use crate::adel_renderer_ash::*;
+pub mod renderer {
+    pub use crate::adel_renderer::*;
 }
 pub mod tools {
     pub use crate::adel_tools::*;
 }
-
 pub mod window {
     pub use crate::adel_winit::*;
 }

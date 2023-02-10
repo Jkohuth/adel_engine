@@ -1,82 +1,65 @@
 use ash::vk;
 use std::hash::{Hash, Hasher};
 
-use nalgebra::{
-    Matrix2,
-    Matrix3,
-    Matrix4,
-    Rotation3,
-    RowVector4,
-    Scale3,
-    Translation3,
-    Vector2, Vector3, Vector4,};
+use nalgebra::{Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4};
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct Vertex2d {
-    pub position: nalgebra::Vector2::<f32>,
-    pub color: nalgebra::Vector3::<f32>,
+    pub position: nalgebra::Vector2<f32>,
+    pub color: nalgebra::Vector3<f32>,
 }
 
-// Note: To use the builder class properly these can be the default vector values and not option
+#[derive(Default)]
 pub struct VertexBuilder {
-    position: Option<Vector3::<f32>>,
-    color:    Option<Vector3::<f32>>,
-    normal:   Option<Vector3::<f32>>,
-    uv:       Option<Vector2::<f32>>,
+    position: Vector3<f32>,
+    color: Vector3<f32>,
+    normal: Vector3<f32>,
+    uv: Vector2<f32>,
 }
 
 impl VertexBuilder {
     pub fn new() -> Self {
         VertexBuilder {
-            position: None,
-            color: None,
-            normal: None,
-            uv: None,
+            position: Vector3::<f32>::default(),
+            color: Vector3::<f32>::default(),
+            normal: Vector3::<f32>::default(),
+            uv: Vector2::<f32>::default(),
         }
     }
     pub fn build(&self) -> Vertex {
         Vertex {
-            position: self.position.unwrap_or_default(),
-            color: self.color.unwrap_or_default(),
-            normal: self.normal.unwrap_or_default(),
-            uv: self.uv.unwrap_or_default()
+            position: self.position,
+            color: self.color,
+            normal: self.normal,
+            uv: self.uv,
         }
     }
-    pub fn position(mut self, position: Vector3::<f32>) -> Self{
-        self.position = Some(position);
+    pub fn position(mut self, position: Vector3<f32>) -> Self {
+        self.position = position;
         self
     }
-    pub fn color(mut self, color: Vector3::<f32>) -> Self{
-        self.color = Some(color);
+    pub fn color(mut self, color: Vector3<f32>) -> Self {
+        self.color = color;
         self
     }
-    pub fn normal(mut self, normal: Vector3::<f32>) -> Self {
-        self.normal = Some(normal);
+    pub fn normal(mut self, normal: Vector3<f32>) -> Self {
+        self.normal = normal;
         self
     }
-    pub fn uv(mut self, uv: Vector2::<f32>) -> Self {
-        self.uv = Some(uv);
+    pub fn uv(mut self, uv: Vector2<f32>) -> Self {
+        self.uv = uv;
         self
     }
 }
-impl Default for VertexBuilder {
-    fn default() -> Self {
-        VertexBuilder {
-            position: None,
-            color: None,
-            normal: None,
-            uv: None,
-        }
-    }
-}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Vertex {
-    pub position: Vector3::<f32>,
-    pub color: Vector3::<f32>,
-    pub normal: Vector3::<f32>,
-    pub uv: Vector2::<f32>
+    pub position: Vector3<f32>,
+    pub color: Vector3<f32>,
+    pub normal: Vector3<f32>,
+    pub uv: Vector2<f32>,
 }
 
 impl Vertex {
@@ -107,20 +90,30 @@ impl Vertex {
             .binding(0)
             .location(2)
             .format(vk::Format::R32G32B32_SFLOAT)
-            .offset((std::mem::size_of::<nalgebra::Vector3::<f32>>() + std::mem::size_of::<nalgebra::Vector3::<f32>>()) as u32)
+            .offset(
+                (std::mem::size_of::<nalgebra::Vector3<f32>>()
+                    + std::mem::size_of::<nalgebra::Vector3<f32>>()) as u32,
+            )
             .build();
         let uv_attrib = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(3)
             .format(vk::Format::R32G32_SFLOAT)
-            .offset((std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3<f32>>() + std::mem::size_of::<nalgebra::Vector3::<f32>>()) as u32)
+            .offset(
+                (std::mem::size_of::<nalgebra::Vector3<f32>>()
+                    + std::mem::size_of::<nalgebra::Vector3<f32>>()
+                    + std::mem::size_of::<nalgebra::Vector3<f32>>()) as u32,
+            )
             .build();
         [pos_attrib, color_attrib, normal_attrib, uv_attrib]
     }
 }
 impl PartialEq for Vertex {
     fn eq(&self, other: &Self) -> bool {
-        self.position == other.position && self.color == other.color && self.normal == other.normal && self.uv == other.uv
+        self.position == other.position
+            && self.color == other.color
+            && self.normal == other.normal
+            && self.uv == other.uv
     }
 }
 
@@ -143,25 +136,23 @@ impl Hash for Vertex {
 }
 
 pub struct TriangleComponent {
-    pub verticies: Vec<Vertex2d>
+    pub verticies: Vec<Vertex2d>,
 }
 impl TriangleComponent {
     pub fn new(verticies: Vec<Vertex2d>) -> Self {
         assert_eq!(verticies.len(), 3);
-        Self {
-            verticies
-        }
+        Self { verticies }
     }
 }
 use ash::vk::{Buffer, DeviceMemory};
 // Bad name I know but this will go away soon
 pub struct VertexIndexComponent {
-    pub vertices : Vec<Vertex>,
-    pub indices : Vec<u32>
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
 }
 pub struct Vertex2dIndexComponent {
-    pub vertices : Vec<Vertex2d>,
-    pub indices : Vec<u16>
+    pub vertices: Vec<Vertex2d>,
+    pub indices: Vec<u16>,
 }
 // TODO: Make a better struct to be passed around
 pub struct BufferComponent {
@@ -181,21 +172,21 @@ pub struct VertexBuffer {
 #[derive(Debug)]
 pub struct PushConstantData {
     pub transform: nalgebra::Matrix4<f32>,
-    pub color: nalgebra::Vector3<f32>
+    pub color: nalgebra::Vector3<f32>,
 }
 #[repr(C)]
 #[derive(Debug)]
 pub struct PushConstantData2D {
     pub transform: nalgebra::Matrix3<f32>,
-    pub color: nalgebra::Vector3<f32>
+    pub color: nalgebra::Vector3<f32>,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct UniformBufferObject {
     pub model: nalgebra::Matrix4<f32>,
-    pub view:  nalgebra::Matrix4<f32>,
-    pub proj:  nalgebra::Matrix4<f32>,
+    pub view: nalgebra::Matrix4<f32>,
+    pub proj: nalgebra::Matrix4<f32>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -235,26 +226,33 @@ impl TransformComponent {
                 self.scale.x * (c1 * c3 + s1 * s2 * s3), // 00
                 self.scale.x * (c2 * s3),                // 10
                 self.scale.x * (c1 * s2 * s3 - c3 * s1), // 20
-                0.0),                                    // 30
+                0.0,
+            ), // 30
             Vector4::<f32>::new(
                 self.scale.y * (c3 * s1 * s2 - c1 * s3), // 01
                 self.scale.y * (c2 * c3),                // 11
                 self.scale.y * (c1 * c3 * s2 + s1 * s3), // 21
-                0.0),                                    // 31
+                0.0,
+            ), // 31
             Vector4::<f32>::new(
-                self.scale.z * (c2 * s1),                // 02
-                self.scale.z * (-s2),                    // 12
-                self.scale.z * (c1 * c2),                // 22
-                0.0),                                    // 32
+                self.scale.z * (c2 * s1), // 02
+                self.scale.z * (-s2),     // 12
+                self.scale.z * (c1 * c2), // 22
+                0.0,
+            ), // 32
             Vector4::<f32>::new(
-                self.translation.x,                         // 03
-                self.translation.y,                         // 13
-                self.translation.z,                         // 23
-                1.0)                                     // 33
-            ])
+                self.translation.x, // 03
+                self.translation.y, // 13
+                self.translation.z, // 23
+                1.0,
+            ), // 33
+        ])
     }
 }
-pub fn create_push_constant_data(camera_projection: Matrix4<f32>, transform: &TransformComponent) -> PushConstantData {
+pub fn create_push_constant_data(
+    camera_projection: Matrix4<f32>,
+    transform: &TransformComponent,
+) -> PushConstantData {
     PushConstantData {
         transform: (camera_projection * transform.mat4_less_computation()),
         color: Vector3::new(0.0, 0.0, 0.0),
@@ -289,7 +287,7 @@ impl Transform2dComponent {
         Self {
             translation,
             scale,
-            rotation
+            rotation,
         }
     }
 
@@ -299,11 +297,11 @@ impl Transform2dComponent {
         // This may be wrong, I haven't used 2D rendering with nalgebra
         let rot_mat = Matrix2::from_columns(&[
             Vector2::new(cos, -sin), // 00 10
-            Vector2::new(sin, cos)  // 10 11
+            Vector2::new(sin, cos),  // 10 11
         ]);
         let scale_mat = Matrix2::from_columns(&[
             Vector2::new(self.scale.x, 0.0),
-            Vector2::new(0.0, self.scale.y)
+            Vector2::new(0.0, self.scale.y),
         ]);
         /* {
             x_axis: Vector2<f32>::new(0.0, 0.0),
@@ -322,17 +320,17 @@ impl Transform2dComponent {
         let rot_mat = Matrix3::from_columns(&[
             Vector3::new(cos, -sin, 0.0), // 00 10 20
             Vector3::new(sin, cos, 0.0),  // 10 11 21
-            Vector3::new(0.0, 0.0, 1.0) // 20 21 22
+            Vector3::new(0.0, 0.0, 1.0),  // 20 21 22
         ]);
         let scale_mat = Matrix3::from_columns(&[
             Vector3::new(self.scale.x, 0.0, 0.0),
             Vector3::new(0.0, self.scale.y, 0.0),
-            Vector3::new(0.0, 0.0, 1.0)
+            Vector3::new(0.0, 0.0, 1.0),
         ]);
         let mut rot_scale_translate = rot_mat * scale_mat;
 
-        rot_scale_translate[(2,0)] = self.translation[0];
-        rot_scale_translate[(2,1)] = self.translation[1];
+        rot_scale_translate[(2, 0)] = self.translation[0];
+        rot_scale_translate[(2, 1)] = self.translation[1];
         //log::info!("Mat3: {:?}", rot_scale_translate);
         rot_scale_translate
     }

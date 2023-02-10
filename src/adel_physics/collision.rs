@@ -1,4 +1,3 @@
-
 use crate::adel_ecs::{System, World};
 use nalgebra::{Vector2, Vector3};
 // BoxCollider2D Component
@@ -18,17 +17,18 @@ impl TryFrom<isize> for Direction {
             dir if dir == Direction::DOWN as isize => Ok(Direction::DOWN),
             dir if dir == Direction::RIGHT as isize => Ok(Direction::RIGHT),
             dir if dir == Direction::LEFT as isize => Ok(Direction::LEFT),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
 impl Direction {
-    pub fn check_direction(direction: &Vector2::<f32>) -> Direction {
+    #[allow(dead_code)]
+    pub fn check_direction(direction: &Vector2<f32>) -> Direction {
         let compass: Vec<Vector2<f32>> = vec![
-            Vector2::new( 0.0, -1.0), // UP
-            Vector2::new( 0.0,  1.0), // DOWN
-            Vector2::new( 1.0,  0.0), // RIGHT
-            Vector2::new(-1.0,  0.0), // LEFT
+            Vector2::new(0.0, -1.0), // UP
+            Vector2::new(0.0, 1.0),  // DOWN
+            Vector2::new(1.0, 0.0),  // RIGHT
+            Vector2::new(-1.0, 0.0), // LEFT
         ];
         let mut max: f32 = 0.0;
         let mut best_match: isize = -1;
@@ -43,37 +43,33 @@ impl Direction {
     }
 }
 pub trait Collider {
-    fn center(&self) -> Vector3::<f32>;
-    fn check_direction(&self, dir: Vector2::<f32>) {
-
-    }
+    fn center(&self) -> Vector3<f32>;
+    fn check_direction(&self, _dir: Vector2<f32>) {}
     fn check_box_collision(&self, other: &BoxCollider2D) -> bool;
     fn name(&self) -> &'static str {
         "collider"
     }
 }
 pub struct BoxCollider2D {
-    center: Vector3::<f32>,
-    extents: Vector2::<f32>
+    center: Vector3<f32>,
+    _extents: Vector2<f32>,
 }
 impl Collider for BoxCollider2D {
-    fn center(&self) -> Vector3::<f32> {
+    fn center(&self) -> Vector3<f32> {
         self.center
     }
-    fn check_box_collision(&self, other: &BoxCollider2D) -> bool {
+    fn check_box_collision(&self, _other: &BoxCollider2D) -> bool {
         false
     }
 }
 impl System for dyn Collider {
-    fn startup(&mut self, world: &mut World) {}
-    fn run(&mut self, world: &mut World) {}
-    fn shutdown(&mut self, world: &mut World) {}
+    fn startup(&mut self, _world: &mut World) {}
+    fn run(&mut self, _world: &mut World) {}
+    fn shutdown(&mut self, _world: &mut World) {}
     fn name(&self) -> &'static str {
         self.name()
     }
-
 }
 // ColliderSystem2D
 // Startup ()
 // Run() -> Compare against
-

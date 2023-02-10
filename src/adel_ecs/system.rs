@@ -5,7 +5,7 @@ pub enum RunStage {
     EarlyUpdate,
     Update,
     RedrawUpdate,
-    LateUpdate
+    LateUpdate,
 }
 
 pub trait System {

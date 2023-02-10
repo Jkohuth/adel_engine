@@ -1,6 +1,6 @@
+use super::structures::DeviceExtension;
 use ash::vk;
 use std::os::raw::c_char;
-use super::structures::DeviceExtension;
 
 // Constants
 // Window title will change when this starts to interact with the rest of the code
@@ -12,8 +12,7 @@ pub const ENGINE_VERSION: u32 = vk::make_api_version(0, 1, 0, 0);
 // TODO: Find out about API versioning here and what would work best
 pub const API_VERSION: u32 = vk::make_api_version(0, 1, 3, 0);
 
-
-pub const VALIDATION_LAYERS: &[&str] =  &["VK_LAYER_KHRONOS_validation"];
+pub const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 pub const ENABLE_VALIDATION_LAYERS: bool = cfg!(debug_assertions);
 
 pub const DEVICE_EXTENSIONS: DeviceExtension = DeviceExtension {
