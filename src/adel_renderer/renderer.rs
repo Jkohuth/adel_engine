@@ -10,11 +10,12 @@ use crate::adel_ecs::{System, World};
 use super::definitions::{BufferComponent, PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
 use crate::adel_renderer::utility::{
-    buffers::AshBuffers,
     constants::*,
     context::{create_logical_device, AshContext},
+    descriptors::AshDescriptors,
     model::*,
     pipeline::AshPipeline,
+    presenter::AshPresenter,
     swapchain::AshSwapchain,
     sync::SyncObjects,
 };
@@ -34,7 +35,8 @@ pub struct RendererAsh {
     swapchain: AshSwapchain,
 
     pipeline: AshPipeline,
-    buffers: AshBuffers,
+    presenter: AshPresenter,
+    descriptors: AshDescriptors,
 
     sync_objects: SyncObjects,
     current_frame: usize,
@@ -60,10 +62,11 @@ impl RendererAsh {
         let pipeline = AshPipeline::new(
             &device,
             swapchain.format(),
-            AshBuffers::get_depth_format(&context)?,
+            AshPresenter::get_depth_format(&context)?,
             swapchain.extent(),
         )?;
-        let buffers = AshBuffers::new(&device, &context, &swapchain, &pipeline)?;
+        let presenter = AshPresenter::new(&device, &context, &swapchain, &pipeline)?;
+        let descriptors = AshDescriptors::new(&device, pipeline.descriptor_set_layout())?;
 
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
 
@@ -73,12 +76,12 @@ impl RendererAsh {
             device,
             swapchain,
             pipeline,
-            buffers,
+            presenter,
+            descriptors,
             sync_objects,
             current_frame: 0,
             is_framebuffer_resized: false,
             window_size,
-            //window,
             name: NAME,
             receiver,
             is_frame_started: false,
@@ -119,7 +122,7 @@ impl RendererAsh {
         self.is_frame_started = true;
         // Set isFrameStarted to true
         // Get the command buffer from the vector that is equal to the current frame
-        let command_buffer = self.buffers.command_buffers()[self.current_frame];
+        let command_buffer = self.presenter.command_buffers()[self.current_frame];
         let begin_info = vk::CommandBufferBeginInfo::default();
 
         unsafe {
@@ -155,7 +158,7 @@ impl RendererAsh {
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(self.pipeline.render_pass().clone())
             .render_area(render_area)
-            .framebuffer(self.buffers.framebuffers()[image_index as usize])
+            .framebuffer(self.presenter.framebuffers()[image_index as usize])
             .clear_values(&clear_values)
             .build();
 
@@ -206,7 +209,7 @@ impl RendererAsh {
         let submit_infos = [vk::SubmitInfo::builder()
             .wait_semaphores(&wait_semaphores)
             .wait_dst_stage_mask(&wait_stages)
-            .command_buffers(&[self.buffers.command_buffers[self.current_frame]])
+            .command_buffers(&[self.presenter.command_buffers[self.current_frame]])
             .signal_semaphores(&signal_semaphores)
             .build()];
 
@@ -273,7 +276,7 @@ impl RendererAsh {
                 self.pipeline.graphics_pipeline(),
             );
             for model in models.iter() {
-                AshBuffers::update_uniform_buffer_new(
+                AshPresenter::update_uniform_buffer_new(
                     &self.device,
                     &model.uniform_buffers_memory,
                     self.current_frame,
@@ -337,18 +340,18 @@ impl RendererAsh {
             .update_screen_width_height(width_height.0, width_height.1);
         self.swapchain
             .recreate_swapchain(&self.context, &self.device, self.window_size)?;
-        self.buffers.recreate_depth_image(
+        self.presenter.recreate_depth_image(
             &self.context,
             &self.device,
             self.swapchain.swapchain_info.swapchain_extent,
         )?;
         self.pipeline
             .recreate_render_pass(&self.device, self.swapchain.swapchain_info.swapchain_format)?;
-        self.buffers.recreate_framebuffers(
+        self.presenter.recreate_framebuffers(
             &self.device,
             self.pipeline.render_pass().clone(),
             &self.swapchain.image_views(),
-            self.buffers.depth_image_view().clone(),
+            self.presenter.depth_image_view().clone(),
             self.swapchain.extent(),
         )?;
         Ok(())
@@ -368,8 +371,8 @@ impl RendererAsh {
         unsafe {
             self.swapchain.destroy_swapchain(&self.device);
             self.pipeline.destroy_render_pass(&self.device);
-            self.buffers.destroy_framebuffers(&self.device);
-            self.buffers.destroy_depth_image(&self.device);
+            self.presenter.destroy_framebuffers(&self.device);
+            self.presenter.destroy_depth_image(&self.device);
         }
     }
 }
@@ -384,7 +387,6 @@ use crate::adel_ecs::RunStage;
 impl System for RendererAsh {
     fn startup(&mut self, world: &mut World) {
         let mut model_vec: Vec<Option<ModelComponent>> = Vec::new();
-        //let mut buffer_component_vec: Vec<Option<BufferComponent>> = Vec::new();
 
         {
             let model_component_builder =
@@ -397,8 +399,8 @@ impl System for RendererAsh {
                             .build(
                                 &self.context,
                                 &self.device,
-                                &self.buffers,
-                                self.pipeline.descriptor_set_layout(),
+                                &self.presenter,
+                                &self.descriptors,
                             )
                             .expect("Failed to build model"),
                     ));
@@ -407,7 +409,7 @@ impl System for RendererAsh {
                 }
             }
         }
-        //world.insert_component(buffer_component_vec);
+
         world.insert_component(model_vec);
     }
     fn run(&mut self, world: &mut World) {
@@ -479,7 +481,8 @@ impl Drop for RendererAsh {
             self.sync_objects
                 .cleanup_sync_objects(&self.device, MAX_FRAMES_IN_FLIGHT);
 
-            self.buffers.destroy_all(&self.device);
+            self.descriptors.destroy_descriptor_pool(&self.device);
+            self.presenter.destroy_all(&self.device);
 
             // Destorys Swapchain and ImageViews
             self.swapchain.destroy_swapchain(&self.device);

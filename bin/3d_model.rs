@@ -1,17 +1,16 @@
 use adel::app::Application;
 use adel::ecs::World;
 use adel::input::KeyboardComponent;
-use adel::renderer::utility::model::ModelComponentBuilder;
+use adel::renderer::utility::model::ModelComponent;
 use adel::renderer::TransformComponent;
 use std::path::Path;
 fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
     let mut world = World::new();
-    let mut model_build = ModelComponentBuilder::new();
-    model_build.load_model(Path::new("resources/viking_room.obj"));
-    model_build.load_texture(Path::new("resources/viking_room.png"));
+    let model_build = ModelComponent::builder()
+        .load_model(Path::new("resources/viking_room.obj"))
+        .load_texture(Path::new("resources/viking_room.png"));
     let camera_transform = TransformComponent::default();
-    log::info!("Camera Transform {:?}", camera_transform);
     let cube_transform = TransformComponent::default();
     //cube_transform.translation.z += 5.0;
     //cube_transform.rotation.x += 180.0;

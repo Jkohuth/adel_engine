@@ -1,5 +1,7 @@
 use crate::adel_renderer::definitions::Vertex;
-use crate::adel_renderer::utility::{buffers::AshBuffers, context::AshContext};
+use crate::adel_renderer::utility::{
+    context::AshContext, descriptors::AshDescriptors, presenter::AshPresenter,
+};
 use anyhow::Result;
 use ash::vk;
 use image::{DynamicImage, RgbaImage};
@@ -27,6 +29,10 @@ pub struct ModelComponent {
 }
 
 impl ModelComponent {
+    pub fn builder() -> ModelComponentBuilder {
+        ModelComponentBuilder::new()
+    }
+
     pub fn destroy_model_component(&mut self, device: &ash::Device) {
         unsafe {
             device.destroy_buffer(self.vertex_buffer, None);
@@ -69,7 +75,7 @@ impl ModelComponentBuilder {
             image_height: 0,
         }
     }
-    pub fn load_model(&mut self, file_path: &Path) {
+    pub fn load_model(mut self, file_path: &Path) -> Self {
         let mut reader = BufReader::new(File::open(file_path).expect("Faild to open File"));
 
         let mut indices: Vec<u32> = Vec::new();
@@ -133,8 +139,9 @@ impl ModelComponentBuilder {
         }
         self.vertices = Some(vertices);
         self.indices = Some(indices);
+        self
     }
-    pub fn load_texture(&mut self, image_path: &Path) {
+    pub fn load_texture(mut self, image_path: &Path) -> Self {
         let mut image_object: DynamicImage = image::open(image_path).unwrap();
         image_object = image_object.flipv();
         let (image_width, image_height) = (image_object.width(), image_object.height());
@@ -149,52 +156,53 @@ impl ModelComponentBuilder {
         self.image_size = image_size;
         self.image_width = image_width;
         self.image_height = image_height;
+        self
     }
     pub fn build(
         &self,
         context: &AshContext,
         device: &ash::Device,
-        buffers: &AshBuffers,
-        descriptor_set_layout: vk::DescriptorSetLayout,
+        presenter: &AshPresenter,
+        descriptors: &AshDescriptors,
     ) -> Result<ModelComponent> {
-        let (vertex_buffer, vertex_buffer_memory) = buffers.create_vertex_buffer(
+        let (vertex_buffer, vertex_buffer_memory) = presenter.create_vertex_buffer(
             context,
             device,
             self.vertices.as_ref().unwrap(),
-            buffers.command_pool(),
-            buffers.submit_queue(),
+            presenter.command_pool(),
+            presenter.submit_queue(),
         )?;
-        let (index_buffer, index_buffer_memory) = buffers.create_index_buffer(
+        let (index_buffer, index_buffer_memory) = presenter.create_index_buffer(
             context,
             device,
             self.indices.as_ref().unwrap(),
-            buffers.command_pool(),
-            buffers.submit_queue(),
+            presenter.command_pool(),
+            presenter.submit_queue(),
         )?;
-        let (texture_image, texture_image_memory) = AshBuffers::create_texture_image(
+        let (texture_image, texture_image_memory) = AshPresenter::create_texture_image(
             context,
             device,
             self.image_width,
             self.image_height,
             self.image_size,
             self.image_rgba.clone().unwrap(),
-            buffers.command_pool(),
-            buffers.submit_queue(),
+            presenter.command_pool(),
+            presenter.submit_queue(),
         )?;
-        let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image)?;
-        let texture_sampler = AshBuffers::create_texture_sample(device)?;
+        let texture_image_view = AshPresenter::create_texture_image_view(device, texture_image)?;
+        let texture_sampler = AshPresenter::create_texture_sample(device)?;
 
         let (uniform_buffers, uniform_buffers_memory) =
-            AshBuffers::create_uniform_buffers(context, device)?;
-        let descriptor_sets = AshBuffers::create_descriptor_sets(
+            AshPresenter::create_uniform_buffers(context, device)?;
+        let descriptor_sets = AshDescriptors::create_descriptor_sets_uniform_texture(
             device,
-            buffers.descriptor_pool,
-            descriptor_set_layout,
+            descriptors.descriptor_pool(),
+            descriptors.descriptor_set_layout(),
             &uniform_buffers,
             texture_image_view,
             texture_sampler,
         )?;
-        //let descriptor_sets = AshBuffers::create_descriptor_sets(device, buffers.descriptor_pool, descriptor_set_layout, &uniform_buffers);
+
         Ok(ModelComponent {
             vertex_buffer,
             vertex_buffer_memory,
