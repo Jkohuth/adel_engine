@@ -1,6 +1,6 @@
 use crate::adel_renderer::definitions::Vertex;
 use crate::adel_renderer::utility::{
-    context::AshContext, descriptors::AshDescriptors, presenter::AshPresenter,
+    buffers::AshBuffers, context::AshContext, descriptors::AshDescriptors, presenter::AshPresenter,
 };
 use anyhow::Result;
 use ash::vk;
@@ -162,38 +162,38 @@ impl ModelComponentBuilder {
         &self,
         context: &AshContext,
         device: &ash::Device,
-        presenter: &AshPresenter,
+        buffers: &AshBuffers,
         descriptors: &AshDescriptors,
     ) -> Result<ModelComponent> {
-        let (vertex_buffer, vertex_buffer_memory) = presenter.create_vertex_buffer(
+        let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_vertex_buffer(
             context,
             device,
             self.vertices.as_ref().unwrap(),
-            presenter.command_pool(),
-            presenter.submit_queue(),
+            buffers.command_pool(),
+            buffers.submit_queue(),
         )?;
-        let (index_buffer, index_buffer_memory) = presenter.create_index_buffer(
+        let (index_buffer, index_buffer_memory) = AshBuffers::create_index_buffer(
             context,
             device,
             self.indices.as_ref().unwrap(),
-            presenter.command_pool(),
-            presenter.submit_queue(),
+            buffers.command_pool(),
+            buffers.submit_queue(),
         )?;
-        let (texture_image, texture_image_memory) = AshPresenter::create_texture_image(
+        let (texture_image, texture_image_memory) = AshBuffers::create_texture_image(
             context,
             device,
             self.image_width,
             self.image_height,
             self.image_size,
             self.image_rgba.clone().unwrap(),
-            presenter.command_pool(),
-            presenter.submit_queue(),
+            buffers.command_pool(),
+            buffers.submit_queue(),
         )?;
-        let texture_image_view = AshPresenter::create_texture_image_view(device, texture_image)?;
-        let texture_sampler = AshPresenter::create_texture_sample(device)?;
+        let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image)?;
+        let texture_sampler = AshBuffers::create_texture_sample(device)?;
 
         let (uniform_buffers, uniform_buffers_memory) =
-            AshPresenter::create_uniform_buffers(context, device)?;
+            AshBuffers::create_uniform_buffers(context, device)?;
         let descriptor_sets = AshDescriptors::create_descriptor_sets_uniform_texture(
             device,
             descriptors.descriptor_pool(),

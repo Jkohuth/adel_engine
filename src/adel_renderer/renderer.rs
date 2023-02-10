@@ -10,6 +10,7 @@ use crate::adel_ecs::{System, World};
 use super::definitions::{BufferComponent, PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
 use crate::adel_renderer::utility::{
+    buffers::AshBuffers,
     constants::*,
     context::{create_logical_device, AshContext},
     descriptors::AshDescriptors,
@@ -36,6 +37,7 @@ pub struct RendererAsh {
 
     pipeline: AshPipeline,
     presenter: AshPresenter,
+    buffers: AshBuffers,
     descriptors: AshDescriptors,
 
     sync_objects: SyncObjects,
@@ -66,6 +68,7 @@ impl RendererAsh {
             swapchain.extent(),
         )?;
         let presenter = AshPresenter::new(&device, &context, &swapchain, &pipeline)?;
+        let buffers = AshBuffers::new(&context, &device, swapchain.graphics_queue.clone())?;
         let descriptors = AshDescriptors::new(&device, pipeline.descriptor_set_layout())?;
 
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
@@ -77,6 +80,7 @@ impl RendererAsh {
             swapchain,
             pipeline,
             presenter,
+            buffers,
             descriptors,
             sync_objects,
             current_frame: 0,
@@ -252,9 +256,7 @@ impl RendererAsh {
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
         Ok(())
     }
-    // TODO: Break up this function
-    //pub fn draw_frame(&mut self, buffers: Vec<(&BufferComponent, PushConstantData)>) {
-    //pub fn draw_frame(&mut self, buffers: Vec<&BufferComponent>) {
+
     pub fn draw_frame(
         &mut self,
         models: Vec<&ModelComponent>,
@@ -276,7 +278,7 @@ impl RendererAsh {
                 self.pipeline.graphics_pipeline(),
             );
             for model in models.iter() {
-                AshPresenter::update_uniform_buffer_new(
+                AshBuffers::update_uniform_buffer_new(
                     &self.device,
                     &model.uniform_buffers_memory,
                     self.current_frame,
@@ -399,7 +401,7 @@ impl System for RendererAsh {
                             .build(
                                 &self.context,
                                 &self.device,
-                                &self.presenter,
+                                &self.buffers,
                                 &self.descriptors,
                             )
                             .expect("Failed to build model"),
@@ -445,16 +447,6 @@ impl System for RendererAsh {
                 .device_wait_idle()
                 .expect("ERROR: Failed to wait device idle on shutdown");
 
-            if let Some(mut buffers) = world.borrow_component_mut::<BufferComponent>() {
-                for i in buffers.iter_mut() {
-                    if let Some(buffer) = i {
-                        self.device.destroy_buffer(buffer.vertex_buffer, None);
-                        self.device.free_memory(buffer.vertex_buffer_memory, None);
-                        self.device.destroy_buffer(buffer.index_buffer, None);
-                        self.device.free_memory(buffer.index_buffer_memory, None);
-                    }
-                }
-            }
             if let Some(mut models) = world.borrow_component_mut::<ModelComponent>() {
                 for model in models.iter_mut() {
                     if let Some(i) = model {
@@ -482,6 +474,7 @@ impl Drop for RendererAsh {
                 .cleanup_sync_objects(&self.device, MAX_FRAMES_IN_FLIGHT);
 
             self.descriptors.destroy_descriptor_pool(&self.device);
+            self.buffers.destroy_command_pool(&self.device);
             self.presenter.destroy_all(&self.device);
 
             // Destorys Swapchain and ImageViews
