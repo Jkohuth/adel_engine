@@ -135,15 +135,6 @@ impl Hash for Vertex {
     }
 }
 
-pub struct TriangleComponent {
-    pub verticies: Vec<Vertex2d>,
-}
-impl TriangleComponent {
-    pub fn new(verticies: Vec<Vertex2d>) -> Self {
-        assert_eq!(verticies.len(), 3);
-        Self { verticies }
-    }
-}
 use ash::vk::{Buffer, DeviceMemory};
 // Bad name I know but this will go away soon
 pub struct VertexIndexComponent {

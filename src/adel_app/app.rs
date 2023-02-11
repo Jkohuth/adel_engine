@@ -6,13 +6,11 @@ use crate::adel_renderer::RendererAsh;
 use crate::adel_winit::WinitWindow;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::rc::Rc;
 use std::sync::mpsc;
 use std::time;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::Window,
 };
 
 pub struct Application {
@@ -79,7 +77,8 @@ impl Application {
                     WindowEvent::Resized(window_size) => {
                         // Need to send a message into the Renderer Class that a resize has occured
                         self.transmitter
-                            .send((window_size.width, window_size.height));
+                            .send((window_size.width, window_size.height))
+                            .expect("Failed to send data");
                     }
                     // Leave the close requested event here for now
                     WindowEvent::CloseRequested { .. } => *control_flow = ControlFlow::Exit,
