@@ -7,7 +7,7 @@ use nalgebra::{Matrix4, Vector3};
 
 use crate::adel_ecs::{System, World};
 // TODO: Create a prelude and add these to it
-use super::definitions::{BufferComponent, PushConstantData, TransformComponent};
+use super::definitions::{PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
 use crate::adel_renderer::utility::{
     buffers::AshBuffers,
@@ -21,7 +21,6 @@ use crate::adel_renderer::utility::{
     sync::SyncObjects,
 };
 
-use std::rc::Rc;
 use std::sync::mpsc;
 use winit::window::Window;
 pub const NAME: &'static str = "Renderer";

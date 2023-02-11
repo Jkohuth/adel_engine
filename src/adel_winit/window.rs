@@ -1,5 +1,4 @@
 use crate::adel_ecs::{System, World};
-use std::rc::Rc;
 use winit::{
     event_loop::EventLoop,
     window::{Window, WindowBuilder},

@@ -1,6 +1,6 @@
 use crate::adel_renderer::definitions::Vertex;
 use crate::adel_renderer::utility::{
-    buffers::AshBuffers, context::AshContext, descriptors::AshDescriptors, presenter::AshPresenter,
+    buffers::AshBuffers, context::AshContext, descriptors::AshDescriptors,
 };
 use anyhow::Result;
 use ash::vk;
@@ -158,6 +158,8 @@ impl ModelComponentBuilder {
         self.image_height = image_height;
         self
     }
+    // TODO: Build requires arguments in order to create the Result, additionally it doesn't consume the builder itself
+    // as doing so would cause issues with the ModelComponentBuilder World Component
     pub fn build(
         &self,
         context: &AshContext,

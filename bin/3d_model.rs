@@ -10,12 +10,10 @@ fn main() {
     let model_build = ModelComponent::builder()
         .load_model(Path::new("resources/viking_room.obj"))
         .load_texture(Path::new("resources/viking_room.png"));
-    let camera_transform = TransformComponent::default();
+    let mut camera_transform = TransformComponent::default();
+    camera_transform.translation = nalgebra::Vector3::<f32>::new(2.0, 2.0, 2.0);
     let cube_transform = TransformComponent::default();
-    //cube_transform.translation.z += 5.0;
-    //cube_transform.rotation.x += 180.0;
     let keyboard_component = KeyboardComponent {};
-    //model_build.load_texture(Path::new("resources/viking_room.png"));
     let entity = world.new_entity();
     let camera_entity = world.new_entity();
     world.add_component_to_entity(entity, model_build);
