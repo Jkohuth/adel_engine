@@ -14,13 +14,30 @@ impl AshDescriptors {
         device: &ash::Device,
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> Result<AshDescriptors> {
-        let descriptor_pool = AshDescriptors::create_descriptor_pool(&device)?;
+        //let descriptor_pool = AshDescriptors::create_descriptor_pool_ubo_sampler(&device)?;
+        let descriptor_pool = AshDescriptors::create_descriptor_pool_ubo(&device)?;
         Ok(Self {
             descriptor_pool,
             descriptor_set_layout: descriptor_set_layout.clone(),
         })
     }
-    fn create_descriptor_pool(device: &ash::Device) -> Result<vk::DescriptorPool> {
+    #[allow(dead_code)]
+    fn create_descriptor_pool_ubo(device: &ash::Device) -> Result<vk::DescriptorPool> {
+        let uniform_size = vk::DescriptorPoolSize::builder()
+            .ty(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
+            .build();
+        let pool_size = &[uniform_size];
+        let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::builder()
+            .pool_sizes(pool_size)
+            .max_sets(MAX_FRAMES_IN_FLIGHT as u32)
+            .build();
+        let descriptor_pool =
+            unsafe { device.create_descriptor_pool(&descriptor_pool_create_info, None)? };
+        Ok(descriptor_pool)
+    }
+    #[allow(dead_code)]
+    fn create_descriptor_pool_ubo_sampler(device: &ash::Device) -> Result<vk::DescriptorPool> {
         let uniform_size = vk::DescriptorPoolSize::builder()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)

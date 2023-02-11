@@ -20,7 +20,8 @@ impl AshPipeline {
         extent: vk::Extent2D,
     ) -> Result<Self> {
         let render_pass = AshPipeline::create_render_pass(&device, surface_format, depth_format)?;
-        let descriptor_set_layout = AshPipeline::create_descriptor_set_layout(&device)?;
+        //let descriptor_set_layout = AshPipeline::create_descriptor_set_layout_ubo_texture(&device)?;
+        let descriptor_set_layout = AshPipeline::create_descriptor_set_layout_ubo(&device)?;
         let pipeline_layout = AshPipeline::create_pipeline_layout(&device, descriptor_set_layout)?;
         let graphics_pipeline = AshPipeline::create_graphics_pipeline(
             &device,
@@ -129,7 +130,10 @@ impl AshPipeline {
             unsafe { device.create_descriptor_set_layout(&descriptor_layout_info, None)? };
         Ok(descriptor_set_layout)
     }
-    fn create_descriptor_set_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    #[allow(dead_code)]
+    fn create_descriptor_set_layout_ubo_texture(
+        device: &ash::Device,
+    ) -> Result<vk::DescriptorSetLayout> {
         let ubo_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_count(1)
@@ -188,9 +192,19 @@ impl AshPipeline {
         // Create Shader Modules
         //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.vert", vert, glsl, entry="main");
         //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.frag", frag, glsl, entry="main");
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/uniform_buffer.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/uniform_buffer.frag", frag, glsl, entry="main");
         let vert_spv: &'static [u32] = include_spirv!(
+            "src/adel_renderer/shaders/uniform_buffer.vert",
+            vert,
+            glsl,
+            entry = "main"
+        );
+        let frag_spv: &'static [u32] = include_spirv!(
+            "src/adel_renderer/shaders/uniform_buffer.frag",
+            frag,
+            glsl,
+            entry = "main"
+        );
+        /* let vert_spv: &'static [u32] = include_spirv!(
             "src/adel_renderer/shaders/texture.vert",
             vert,
             glsl,
@@ -201,7 +215,7 @@ impl AshPipeline {
             frag,
             glsl,
             entry = "main"
-        );
+        ); */
         let vert_shader = AshPipeline::create_shader_module(&device, vert_spv)?;
         let frag_shader = AshPipeline::create_shader_module(&device, frag_spv)?;
 

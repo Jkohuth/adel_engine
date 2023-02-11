@@ -345,7 +345,7 @@ impl AshBuffers {
         }
         Ok(())
     }
-    pub fn update_uniform_buffer_new(
+    pub fn update_uniform_buffer_mvp(
         device: &ash::Device,
         uniform_buffers_memory: &Vec<vk::DeviceMemory>,
         current_image: usize,

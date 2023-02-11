@@ -22,10 +22,10 @@ pub struct ModelComponent {
     pub uniform_buffers: Vec<vk::Buffer>,
     pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
-    pub texture_image: vk::Image,
-    pub texture_image_memory: vk::DeviceMemory,
-    pub texture_image_view: vk::ImageView,
-    pub texture_sampler: vk::Sampler,
+    pub texture_image: Option<vk::Image>,
+    pub texture_image_memory: Option<vk::DeviceMemory>,
+    pub texture_image_view: Option<vk::ImageView>,
+    pub texture_sampler: Option<vk::Sampler>,
 }
 
 impl ModelComponent {
@@ -39,10 +39,15 @@ impl ModelComponent {
             device.free_memory(self.vertex_buffer_memory, None);
             device.destroy_buffer(self.index_buffer, None);
             device.free_memory(self.index_buffer_memory, None);
-            device.destroy_image(self.texture_image, None);
-            device.free_memory(self.texture_image_memory, None);
-            device.destroy_image_view(self.texture_image_view, None);
-            device.destroy_sampler(self.texture_sampler, None);
+            match self.texture_image {
+                Some(texture_image) => {
+                    device.destroy_image(self.texture_image.unwrap(), None);
+                    device.free_memory(self.texture_image_memory.unwrap(), None);
+                    device.destroy_image_view(self.texture_image_view.unwrap(), None);
+                    device.destroy_sampler(self.texture_sampler.unwrap(), None);
+                }
+                None => {}
+            }
 
             for i in self.uniform_buffers.iter().enumerate() {
                 device.destroy_buffer(self.uniform_buffers[i.0], None);
@@ -123,6 +128,8 @@ impl ModelComponentBuilder {
                         model.mesh.vertex_color[color_offset + 1],
                         model.mesh.vertex_color[color_offset + 2],
                     ));
+                } else {
+                    vertex_builder = vertex_builder.color(Vector3::new(0.7, 0.7, 0.7));
                 }
 
                 let vertex = vertex_builder.build();
@@ -181,29 +188,57 @@ impl ModelComponentBuilder {
             buffers.command_pool(),
             buffers.submit_queue(),
         )?;
-        let (texture_image, texture_image_memory) = AshBuffers::create_texture_image(
-            context,
-            device,
-            self.image_width,
-            self.image_height,
-            self.image_size,
-            self.image_rgba.clone().unwrap(),
-            buffers.command_pool(),
-            buffers.submit_queue(),
-        )?;
-        let texture_image_view = AshBuffers::create_texture_image_view(device, texture_image)?;
-        let texture_sampler = AshBuffers::create_texture_sample(device)?;
 
         let (uniform_buffers, uniform_buffers_memory) =
             AshBuffers::create_uniform_buffers(context, device)?;
-        let descriptor_sets = AshDescriptors::create_descriptor_sets_uniform_texture(
-            device,
-            descriptors.descriptor_pool(),
-            descriptors.descriptor_set_layout(),
-            &uniform_buffers,
-            texture_image_view,
-            texture_sampler,
-        )?;
+
+        let descriptor_sets;
+        let texture_image;
+        let texture_image_memory;
+        let texture_image_view;
+        let texture_sampler;
+        match &self.image_rgba {
+            Some(_image_rgba) => {
+                let texture_image_tuple = AshBuffers::create_texture_image(
+                    context,
+                    device,
+                    self.image_width,
+                    self.image_height,
+                    self.image_size,
+                    self.image_rgba.clone().unwrap(),
+                    buffers.command_pool(),
+                    buffers.submit_queue(),
+                )?;
+                texture_image = Some(texture_image_tuple.0);
+                texture_image_memory = Some(texture_image_tuple.1);
+                texture_image_view = Some(AshBuffers::create_texture_image_view(
+                    device,
+                    texture_image.unwrap(),
+                )?);
+                texture_sampler = Some(AshBuffers::create_texture_sample(device)?);
+                descriptor_sets = AshDescriptors::create_descriptor_sets_uniform_texture(
+                    device,
+                    descriptors.descriptor_pool(),
+                    descriptors.descriptor_set_layout(),
+                    &uniform_buffers,
+                    texture_image_view.unwrap(),
+                    texture_sampler.unwrap(),
+                )?;
+            }
+
+            None => {
+                texture_image = None;
+                texture_image_memory = None;
+                texture_image_view = None;
+                texture_sampler = None;
+                descriptor_sets = AshDescriptors::create_descriptor_sets_uniform(
+                    device,
+                    descriptors.descriptor_pool(),
+                    descriptors.descriptor_set_layout(),
+                    &uniform_buffers,
+                )?;
+            }
+        }
 
         Ok(ModelComponent {
             vertex_buffer,

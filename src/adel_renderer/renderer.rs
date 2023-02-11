@@ -277,7 +277,7 @@ impl RendererAsh {
                 self.pipeline.graphics_pipeline(),
             );
             for model in models.iter() {
-                AshBuffers::update_uniform_buffer_new(
+                AshBuffers::update_uniform_buffer_mvp(
                     &self.device,
                     &model.uniform_buffers_memory,
                     self.current_frame,
@@ -424,8 +424,6 @@ impl System for RendererAsh {
         for i in models.iter().enumerate() {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &mut transform_component[i.0] {
-                    transform.rotation.z += 0.25 * world.get_dt();
-                    //transform.rotation.y -= (0.25 * world.get_dt());
                     model_matrix = transform.mat4_less_computation();
                     model_vec.push(buffer);
                 }

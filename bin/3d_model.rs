@@ -7,11 +7,10 @@ use std::path::Path;
 fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
     let mut world = World::new();
-    let model_build = ModelComponent::builder()
-        .load_model(Path::new("resources/viking_room.obj"))
-        .load_texture(Path::new("resources/viking_room.png"));
+    let model_build = ModelComponent::builder().load_model(Path::new("resources/smooth_vase.obj"));
+    //.load_texture(Path::new("resources/viking_room.png"));
     let mut camera_transform = TransformComponent::default();
-    camera_transform.translation = nalgebra::Vector3::<f32>::new(2.0, 2.0, 2.0);
+    camera_transform.translation = nalgebra::Vector3::<f32>::new(0.0, -0.5, -0.5);
     let cube_transform = TransformComponent::default();
     let keyboard_component = KeyboardComponent {};
     let entity = world.new_entity();
