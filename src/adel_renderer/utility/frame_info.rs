@@ -5,7 +5,7 @@ use super::{
 };
 use anyhow::Result;
 use ash::vk;
-pub struct AshPresenter {
+pub struct AshFrameInfo {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub command_pool: vk::CommandPool,
     transient_command_pool: vk::CommandPool,
@@ -16,35 +16,35 @@ pub struct AshPresenter {
     depth_image_memory: vk::DeviceMemory,
     depth_image_view: vk::ImageView,
 }
-impl AshPresenter {
+impl AshFrameInfo {
     pub fn new(
         device: &ash::Device,
         context: &AshContext,
         swapchain: &AshSwapchain,
         pipeline: &AshPipeline,
     ) -> Result<Self> {
-        let command_pool = AshPresenter::create_command_pool(
+        let command_pool = AshFrameInfo::create_command_pool(
             &device,
             &context.queue_family,
             vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
         )?;
-        let command_buffers = AshPresenter::create_command_buffers(&device, command_pool)?;
+        let command_buffers = AshFrameInfo::create_command_buffers(&device, command_pool)?;
         let graphics_transient_queue = swapchain.graphics_queue.clone();
-        let (depth_image, depth_image_memory, depth_image_view) = AshPresenter::create_depth_image(
+        let (depth_image, depth_image_memory, depth_image_view) = AshFrameInfo::create_depth_image(
             &context,
             &device,
             swapchain.swapchain_info.swapchain_extent,
             &command_pool,
             graphics_transient_queue,
         )?;
-        let framebuffers = AshPresenter::create_framebuffers(
+        let framebuffers = AshFrameInfo::create_framebuffers(
             &device,
             pipeline.render_pass().clone(),
             &swapchain.image_views,
             depth_image_view,
             swapchain.extent(),
         )?;
-        let transient_command_pool = AshPresenter::create_command_pool(
+        let transient_command_pool = AshFrameInfo::create_command_pool(
             &device,
             &context.queue_family,
             vk::CommandPoolCreateFlags::TRANSIENT,
@@ -124,7 +124,7 @@ impl AshPresenter {
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) -> Result<(vk::Image, vk::DeviceMemory, vk::ImageView)> {
-        let format = AshPresenter::get_depth_format(context)?;
+        let format = AshFrameInfo::get_depth_format(context)?;
         let (depth_image, depth_image_memory) = AshBuffers::create_image(
             context,
             device,
@@ -163,7 +163,7 @@ impl AshPresenter {
         depth_image_view: vk::ImageView,
         extent: vk::Extent2D,
     ) -> Result<()> {
-        let framebuffers = AshPresenter::create_framebuffers(
+        let framebuffers = AshFrameInfo::create_framebuffers(
             device,
             render_pass,
             image_views,
@@ -179,7 +179,7 @@ impl AshPresenter {
         device: &ash::Device,
         extent: vk::Extent2D,
     ) -> Result<()> {
-        let (depth_image, depth_image_memory, depth_image_view) = AshPresenter::create_depth_image(
+        let (depth_image, depth_image_memory, depth_image_view) = AshFrameInfo::create_depth_image(
             context,
             device,
             extent,

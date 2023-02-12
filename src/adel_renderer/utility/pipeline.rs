@@ -1,4 +1,4 @@
-use crate::adel_renderer::definitions::Vertex;
+use crate::adel_renderer::definitions::{PushConstantData, Vertex};
 use anyhow::Result;
 use ash::vk;
 use inline_spirv::include_spirv;
@@ -159,14 +159,14 @@ impl AshPipeline {
         device: &ash::Device,
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> Result<vk::PipelineLayout> {
-        //let push_constant_range = [vk::PushConstantRange::builder()
-        //    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-        //    .offset(0)
-        //    .size(std::mem::size_of::<PushConstantData>() as u32)
-        //    .build()];
+        let push_constant_range = [vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+            .offset(0)
+            .size(std::mem::size_of::<PushConstantData>() as u32)
+            .build()];
         let set_layouts = [descriptor_set_layout];
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
-            //    .push_constant_ranges(&push_constant_range)
+            .push_constant_ranges(&push_constant_range)
             .set_layouts(&set_layouts)
             .build();
 
@@ -190,8 +190,6 @@ impl AshPipeline {
         swapchain_extent: vk::Extent2D,
     ) -> Result<vk::Pipeline> {
         // Create Shader Modules
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.frag", frag, glsl, entry="main");
         let vert_spv: &'static [u32] = include_spirv!(
             "src/adel_renderer/shaders/uniform_buffer.vert",
             vert,

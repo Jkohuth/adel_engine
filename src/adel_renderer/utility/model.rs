@@ -19,9 +19,8 @@ pub struct ModelComponent {
     pub index_buffer_memory: vk::DeviceMemory,
     pub indices_count: u32,
 
-    pub uniform_buffers: Vec<vk::Buffer>,
-    pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    //pub uniform_buffers: Vec<vk::Buffer>,
+    //pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
     pub texture_image: Option<vk::Image>,
     pub texture_image_memory: Option<vk::DeviceMemory>,
     pub texture_image_view: Option<vk::ImageView>,
@@ -49,10 +48,10 @@ impl ModelComponent {
                 None => {}
             }
 
-            for i in self.uniform_buffers.iter().enumerate() {
-                device.destroy_buffer(self.uniform_buffers[i.0], None);
-                device.free_memory(self.uniform_buffers_memory[i.0], None);
-            }
+            //for i in self.uniform_buffers.iter().enumerate() {
+            //    device.destroy_buffer(self.uniform_buffers[i.0], None);
+            //    device.free_memory(self.uniform_buffers_memory[i.0], None);
+            //}
         }
     }
 }
@@ -172,7 +171,6 @@ impl ModelComponentBuilder {
         context: &AshContext,
         device: &ash::Device,
         buffers: &AshBuffers,
-        descriptors: &AshDescriptors,
     ) -> Result<ModelComponent> {
         let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_vertex_buffer(
             context,
@@ -189,10 +187,6 @@ impl ModelComponentBuilder {
             buffers.submit_queue(),
         )?;
 
-        let (uniform_buffers, uniform_buffers_memory) =
-            AshBuffers::create_uniform_buffers(context, device)?;
-
-        let descriptor_sets;
         let texture_image;
         let texture_image_memory;
         let texture_image_view;
@@ -216,14 +210,6 @@ impl ModelComponentBuilder {
                     texture_image.unwrap(),
                 )?);
                 texture_sampler = Some(AshBuffers::create_texture_sample(device)?);
-                descriptor_sets = AshDescriptors::create_descriptor_sets_uniform_texture(
-                    device,
-                    descriptors.descriptor_pool(),
-                    descriptors.descriptor_set_layout(),
-                    &uniform_buffers,
-                    texture_image_view.unwrap(),
-                    texture_sampler.unwrap(),
-                )?;
             }
 
             None => {
@@ -231,12 +217,6 @@ impl ModelComponentBuilder {
                 texture_image_memory = None;
                 texture_image_view = None;
                 texture_sampler = None;
-                descriptor_sets = AshDescriptors::create_descriptor_sets_uniform(
-                    device,
-                    descriptors.descriptor_pool(),
-                    descriptors.descriptor_set_layout(),
-                    &uniform_buffers,
-                )?;
             }
         }
 
@@ -250,9 +230,6 @@ impl ModelComponentBuilder {
             texture_image_memory,
             texture_image_view,
             texture_sampler,
-            uniform_buffers,
-            uniform_buffers_memory,
-            descriptor_sets,
         })
     }
 }

@@ -37,7 +37,7 @@ impl System for KeyboardHandler {
 
         let dims = window.inner_size();
         let aspect_ratio = dims.width as f32 / dims.height as f32;
-        camera.set_perspective_projection((50.0f32).to_radians(), aspect_ratio, 0.1, 10.0);
+        camera.set_perspective_projection((50.0f32).to_radians(), aspect_ratio, 0.1, 100.0);
 
         for i in input_ref.iter().enumerate() {
             if let Some(_input_entity) = i.1 {

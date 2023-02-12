@@ -2,11 +2,13 @@ use anyhow::{anyhow, Result};
 use ash::vk;
 //use winit::event::{Event, VirtualKeyCode, ElementState, KeyboardInput, WindowEvent};
 //use winit::event_loop::{EventLoop, ControlFlow};
-
+#[allow(unused_imports)]
+use crate::renderer::UniformBufferObject;
+#[allow(unused_imports)]
 use nalgebra::{Matrix4, Vector3};
 
 use crate::adel_ecs::{System, World};
-use crate::renderer::UniformBufferObject;
+use crate::adel_tools::as_bytes;
 // TODO: Create a prelude and add these to it
 use super::definitions::{PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
@@ -15,9 +17,9 @@ use crate::adel_renderer::utility::{
     constants::*,
     context::{create_logical_device, AshContext},
     descriptors::AshDescriptors,
+    frame_info::AshFrameInfo,
     model::*,
     pipeline::AshPipeline,
-    presenter::AshPresenter,
     swapchain::AshSwapchain,
     sync::SyncObjects,
 };
@@ -36,15 +38,16 @@ pub struct RendererAsh {
     swapchain: AshSwapchain,
 
     pipeline: AshPipeline,
-    presenter: AshPresenter,
+    presenter: AshFrameInfo,
     buffers: AshBuffers,
+    uniform_buffers: Vec<vk::Buffer>,
+    uniform_buffers_memory: Vec<vk::DeviceMemory>,
     descriptors: AshDescriptors,
 
     sync_objects: SyncObjects,
     current_frame: usize,
     is_framebuffer_resized: bool,
     window_size: (u32, u32),
-    //pub window: Rc<Window>,
     name: &'static str,
     receiver: mpsc::Receiver<(u32, u32)>,
 
@@ -64,12 +67,15 @@ impl RendererAsh {
         let pipeline = AshPipeline::new(
             &device,
             swapchain.format(),
-            AshPresenter::get_depth_format(&context)?,
+            AshFrameInfo::get_depth_format(&context)?,
             swapchain.extent(),
         )?;
-        let presenter = AshPresenter::new(&device, &context, &swapchain, &pipeline)?;
+        let presenter = AshFrameInfo::new(&device, &context, &swapchain, &pipeline)?;
         let buffers = AshBuffers::new(&context, &device, swapchain.graphics_queue.clone())?;
-        let descriptors = AshDescriptors::new(&device, pipeline.descriptor_set_layout())?;
+        let (uniform_buffers, uniform_buffers_memory) =
+            AshBuffers::create_uniform_buffers(&context, &device)?;
+        let descriptors =
+            AshDescriptors::new(&device, pipeline.descriptor_set_layout(), &uniform_buffers)?;
 
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
 
@@ -81,6 +87,8 @@ impl RendererAsh {
             pipeline,
             presenter,
             buffers,
+            uniform_buffers,
+            uniform_buffers_memory,
             descriptors,
             sync_objects,
             current_frame: 0,
@@ -258,17 +266,14 @@ impl RendererAsh {
     }
 
     // TODO: Every Model should have it's own model Matrix but I'm simplifying things for now
-    pub fn draw_frame(
-        &mut self,
-        models: Vec<&ModelComponent>,
-        //ubo: UniformBufferObject,
-    ) -> Result<()> {
+    pub fn draw_frame(&mut self, models: Vec<(&ModelComponent, PushConstantData)>) -> Result<()> {
         // Begin_frame requires a return of Image_index, wait_fences and command_buffer
         let (wait_fences, image_index, command_buffer) = self.begin_frame()?;
         self.begin_swapchain_render_pass(image_index, &command_buffer);
         // Render Objects
         //bind pipeline
         let device_size_offsets: [vk::DeviceSize; 1] = [0];
+        let descriptor_sets_to_bind = [self.descriptors.global_descriptor_sets[self.current_frame]];
         //let descriptor_sets = self.buffers.descriptor_sets.as_ref().unwrap();
         unsafe {
             self.device.cmd_bind_pipeline(
@@ -276,46 +281,37 @@ impl RendererAsh {
                 vk::PipelineBindPoint::GRAPHICS,
                 self.pipeline.graphics_pipeline(),
             );
+            self.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline.pipeline_layout(),
+                0,
+                &descriptor_sets_to_bind,
+                &[],
+            );
             for model in models.iter() {
-                //AshBuffers::update_uniform_buffer_mvp(
-                //    &self.device,
-                //    &model.uniform_buffers_memory,
-                //    self.current_frame,
-                //    model_matrix,
-                //    proj,
-                //    view,
-                //)?;
-                let descriptor_sets_to_bind = [model.descriptor_sets[self.current_frame]];
                 self.device.cmd_bind_vertex_buffers(
                     command_buffer,
                     0,
-                    &[model.vertex_buffer],
+                    &[model.0.vertex_buffer],
                     &device_size_offsets,
                 );
                 self.device.cmd_bind_index_buffer(
                     command_buffer,
-                    model.index_buffer,
+                    model.0.index_buffer,
                     0,
                     vk::IndexType::UINT32,
                 );
-                self.device.cmd_bind_descriptor_sets(
+                self.device.cmd_push_constants(
                     command_buffer,
-                    vk::PipelineBindPoint::GRAPHICS,
                     self.pipeline.pipeline_layout(),
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                     0,
-                    &descriptor_sets_to_bind,
-                    &[],
+                    as_bytes(&model.1),
                 );
-                //self.device
-                //    .cmd_push_constants(command_buffer,
-                //        self.pipeline.pipeline_layout(),
-                //        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                //        0,
-                //        as_bytes(&buffer.1)
-                //    );
 
                 self.device
-                    .cmd_draw_indexed(command_buffer, model.indices_count, 1, 0, 0, 0);
+                    .cmd_draw_indexed(command_buffer, model.0.indices_count, 1, 0, 0, 0);
             }
         }
 
@@ -377,12 +373,6 @@ impl RendererAsh {
         }
     }
 }
-pub fn create_push_constant_data_tmp(tmp: Matrix4<f32>) -> PushConstantData {
-    PushConstantData {
-        transform: tmp, //camera_projection,
-        color: Vector3::new(0.0, 1.0, 0.0),
-    }
-}
 
 use crate::adel_ecs::RunStage;
 impl System for RendererAsh {
@@ -397,12 +387,7 @@ impl System for RendererAsh {
                     // TODO: Make Component Push fuction to account for None
                     model_vec.push(Some(
                         component
-                            .build(
-                                &self.context,
-                                &self.device,
-                                &self.buffers,
-                                &self.descriptors,
-                            )
+                            .build(&self.context, &self.device, &self.buffers)
                             .expect("Failed to build model"),
                     ));
                 } else {
@@ -419,29 +404,30 @@ impl System for RendererAsh {
         let models = world.borrow_component::<ModelComponent>().unwrap();
         let mut transform_component = world.borrow_component_mut::<TransformComponent>().unwrap();
         let camera = world.get_resource::<Camera>().unwrap();
-        let proj = camera.get_projection();
-        let view = camera.get_view();
-        let mut model_vec: Vec<&ModelComponent> = Vec::new();
+        let projection_view = camera.get_projection() * camera.get_view();
+        AshBuffers::update_global_uniform_buffer(
+            &self.device,
+            &self.uniform_buffers_memory,
+            self.current_frame,
+            projection_view,
+        )
+        .expect("Failed to update Uniform Buffers");
+        let mut model_push_vec: Vec<(&ModelComponent, PushConstantData)> = Vec::new();
         for i in models.iter().enumerate() {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &mut transform_component[i.0] {
                     let model_matrix = transform.mat4_less_computation();
-                    let normal_model = transform.normal_matrix();
-                    AshBuffers::update_uniform_buffer_mvp_normal(
-                        &self.device,
-                        &buffer.uniform_buffers_memory,
-                        self.current_frame,
+                    let normal_matrix = transform.normal_matrix_mat4();
+                    let push = PushConstantData {
                         model_matrix,
-                        proj,
-                        view,
-                        normal_model,
-                    )
-                    .expect("Failed to update Uniform Buffers");
-                    model_vec.push(buffer);
+                        normal_matrix,
+                    };
+                    model_push_vec.push((buffer, push));
                 }
             }
         }
-        self.draw_frame(model_vec).expect("Failed to draw frame");
+        self.draw_frame(model_push_vec)
+            .expect("Failed to draw frame");
     }
     // TODO: When Uniform buffers, Textures, and Models are abstracted to components, they need to be freed here
     fn shutdown(&mut self, world: &mut World) {
@@ -475,7 +461,11 @@ impl Drop for RendererAsh {
             // Destroys Fences and Semaphores
             self.sync_objects
                 .cleanup_sync_objects(&self.device, MAX_FRAMES_IN_FLIGHT);
-
+            for i in self.uniform_buffers.iter().enumerate() {
+                self.device.destroy_buffer(self.uniform_buffers[i.0], None);
+                self.device
+                    .free_memory(self.uniform_buffers_memory[i.0], None);
+            }
             self.descriptors.destroy_descriptor_pool(&self.device);
             self.buffers.destroy_command_pool(&self.device);
             self.presenter.destroy_all(&self.device);
