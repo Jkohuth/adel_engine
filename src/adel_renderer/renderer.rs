@@ -6,6 +6,7 @@ use ash::vk;
 use nalgebra::{Matrix4, Vector3};
 
 use crate::adel_ecs::{System, World};
+use crate::renderer::UniformBufferObject;
 // TODO: Create a prelude and add these to it
 use super::definitions::{PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
@@ -256,12 +257,11 @@ impl RendererAsh {
         Ok(())
     }
 
+    // TODO: Every Model should have it's own model Matrix but I'm simplifying things for now
     pub fn draw_frame(
         &mut self,
         models: Vec<&ModelComponent>,
-        model_matrix: nalgebra::Matrix4<f32>,
-        proj: nalgebra::Matrix4<f32>,
-        view: nalgebra::Matrix4<f32>,
+        //ubo: UniformBufferObject,
     ) -> Result<()> {
         // Begin_frame requires a return of Image_index, wait_fences and command_buffer
         let (wait_fences, image_index, command_buffer) = self.begin_frame()?;
@@ -277,14 +277,14 @@ impl RendererAsh {
                 self.pipeline.graphics_pipeline(),
             );
             for model in models.iter() {
-                AshBuffers::update_uniform_buffer_mvp(
-                    &self.device,
-                    &model.uniform_buffers_memory,
-                    self.current_frame,
-                    model_matrix,
-                    proj,
-                    view,
-                )?;
+                //AshBuffers::update_uniform_buffer_mvp(
+                //    &self.device,
+                //    &model.uniform_buffers_memory,
+                //    self.current_frame,
+                //    model_matrix,
+                //    proj,
+                //    view,
+                //)?;
                 let descriptor_sets_to_bind = [model.descriptor_sets[self.current_frame]];
                 self.device.cmd_bind_vertex_buffers(
                     command_buffer,
@@ -419,23 +419,29 @@ impl System for RendererAsh {
         let models = world.borrow_component::<ModelComponent>().unwrap();
         let mut transform_component = world.borrow_component_mut::<TransformComponent>().unwrap();
         let camera = world.get_resource::<Camera>().unwrap();
+        let proj = camera.get_projection();
+        let view = camera.get_view();
         let mut model_vec: Vec<&ModelComponent> = Vec::new();
-        let mut model_matrix = nalgebra::Matrix4::identity();
         for i in models.iter().enumerate() {
             if let Some(buffer) = i.1 {
                 if let Some(transform) = &mut transform_component[i.0] {
-                    model_matrix = transform.mat4_less_computation();
+                    let model_matrix = transform.mat4_less_computation();
+                    let normal_model = transform.normal_matrix();
+                    AshBuffers::update_uniform_buffer_mvp_normal(
+                        &self.device,
+                        &buffer.uniform_buffers_memory,
+                        self.current_frame,
+                        model_matrix,
+                        proj,
+                        view,
+                        normal_model,
+                    )
+                    .expect("Failed to update Uniform Buffers");
                     model_vec.push(buffer);
                 }
             }
         }
-        self.draw_frame(
-            model_vec,
-            model_matrix,
-            camera.get_projection(),
-            camera.get_view(),
-        )
-        .expect("Failed to draw frame");
+        self.draw_frame(model_vec).expect("Failed to draw frame");
     }
     // TODO: When Uniform buffers, Textures, and Models are abstracted to components, they need to be freed here
     fn shutdown(&mut self, world: &mut World) {

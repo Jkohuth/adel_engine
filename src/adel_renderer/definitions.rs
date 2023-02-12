@@ -135,6 +135,15 @@ impl Hash for Vertex {
     }
 }
 
+pub struct TriangleComponent {
+    pub verticies: Vec<Vertex2d>,
+}
+impl TriangleComponent {
+    pub fn new(verticies: Vec<Vertex2d>) -> Self {
+        assert_eq!(verticies.len(), 3);
+        Self { verticies }
+    }
+}
 use ash::vk::{Buffer, DeviceMemory};
 // Bad name I know but this will go away soon
 pub struct VertexIndexComponent {
@@ -178,6 +187,7 @@ pub struct UniformBufferObject {
     pub model: nalgebra::Matrix4<f32>,
     pub view: nalgebra::Matrix4<f32>,
     pub proj: nalgebra::Matrix4<f32>,
+    pub normal_model: nalgebra::Matrix4<f32>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -217,26 +227,57 @@ impl TransformComponent {
                 self.scale.x * (c1 * c3 + s1 * s2 * s3), // 00
                 self.scale.x * (c2 * s3),                // 10
                 self.scale.x * (c1 * s2 * s3 - c3 * s1), // 20
-                0.0,
-            ), // 30
+                0.0,                                     // 30
+            ),
             Vector4::<f32>::new(
                 self.scale.y * (c3 * s1 * s2 - c1 * s3), // 01
                 self.scale.y * (c2 * c3),                // 11
                 self.scale.y * (c1 * c3 * s2 + s1 * s3), // 21
-                0.0,
-            ), // 31
+                0.0,                                     // 31
+            ),
             Vector4::<f32>::new(
                 self.scale.z * (c2 * s1), // 02
                 self.scale.z * (-s2),     // 12
                 self.scale.z * (c1 * c2), // 22
-                0.0,
-            ), // 32
+                0.0,                      // 32
+            ),
             Vector4::<f32>::new(
                 self.translation.x, // 03
                 self.translation.y, // 13
                 self.translation.z, // 23
-                1.0,
-            ), // 33
+                1.0,                // 33
+            ),
+        ])
+    }
+    pub fn normal_matrix(&self) -> Matrix4<f32> {
+        let c3 = self.rotation.z.cos();
+        let s3 = self.rotation.z.sin();
+        let c2 = self.rotation.x.cos();
+        let s2 = self.rotation.x.sin();
+        let c1 = self.rotation.y.cos();
+        let s1 = self.rotation.y.sin();
+        let inverse_scale =
+            Vector3::new(1.0 / self.scale.x, 1.0 / self.scale.y, 1.0 / self.scale.z);
+        Matrix4::from_columns(&[
+            Vector4::<f32>::new(
+                inverse_scale.x * (c1 * c3 + s1 * s2 * s3), // 00
+                inverse_scale.x * (c2 * s3),                // 10
+                inverse_scale.x * (c1 * s2 * s3 - c3 * s1), // 20
+                0.0,
+            ),
+            Vector4::<f32>::new(
+                inverse_scale.y * (c3 * s1 * s2 - c1 * s3), // 01
+                inverse_scale.y * (c2 * c3),                // 11
+                inverse_scale.y * (c1 * c3 * s2 + s1 * s3), // 21
+                0.0,
+            ),
+            Vector4::<f32>::new(
+                inverse_scale.z * (c2 * s1), // 02
+                inverse_scale.z * (-s2),     // 12
+                inverse_scale.z * (c1 * c2), // 22
+                0.0,
+            ),
+            Vector4::<f32>::new(0.0, 0.0, 0.0, 1.0),
         ])
     }
 }

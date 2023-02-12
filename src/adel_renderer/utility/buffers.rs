@@ -327,6 +327,7 @@ impl AshBuffers {
             model: nalgebra::Matrix4::<f32>::identity(),
             view: nalgebra::Matrix4::<f32>::identity(),
             proj,
+            normal_model: nalgebra::Matrix4::<f32>::identity(),
         }];
 
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
@@ -353,7 +354,12 @@ impl AshBuffers {
         proj: nalgebra::Matrix4<f32>,
         view: nalgebra::Matrix4<f32>,
     ) -> Result<()> {
-        let ubos = [UniformBufferObject { model, view, proj }];
+        let ubos = [UniformBufferObject {
+            model,
+            view,
+            proj,
+            normal_model: nalgebra::Matrix4::identity(),
+        }];
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
 
         unsafe {
@@ -368,6 +374,38 @@ impl AshBuffers {
 
             device.unmap_memory(uniform_buffers_memory[current_image]);
         }
+        Ok(())
+    }
+    pub fn update_uniform_buffer_mvp_normal(
+        device: &ash::Device,
+        uniform_buffers_memory: &Vec<vk::DeviceMemory>,
+        current_image: usize,
+        model: nalgebra::Matrix4<f32>,
+        proj: nalgebra::Matrix4<f32>,
+        view: nalgebra::Matrix4<f32>,
+        normal_model: nalgebra::Matrix4<f32>,
+    ) -> Result<()> {
+        let ubos = [UniformBufferObject {
+            model,
+            view,
+            proj,
+            normal_model,
+        }];
+        let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
+
+        unsafe {
+            let data_ptr = device.map_memory(
+                uniform_buffers_memory[current_image],
+                0,
+                buffer_size,
+                vk::MemoryMapFlags::empty(),
+            )? as *mut UniformBufferObject;
+
+            data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
+
+            device.unmap_memory(uniform_buffers_memory[current_image]);
+        }
+
         Ok(())
     }
     pub fn create_texture_image_bak(
