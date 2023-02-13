@@ -120,7 +120,7 @@ impl AshPipeline {
             .binding(0)
             .descriptor_count(1)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .stage_flags(vk::ShaderStageFlags::ALL_GRAPHICS)
             .build();
         let bindings = &[ubo_layout_bindings];
         let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
