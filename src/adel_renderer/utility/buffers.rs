@@ -1,7 +1,7 @@
 use ash::vk;
 
 use super::constants::MAX_FRAMES_IN_FLIGHT;
-use super::presenter::AshPresenter;
+use super::frame_info::AshFrameInfo;
 use super::{context::AshContext, swapchain::AshSwapchain};
 use crate::adel_renderer::definitions::{UniformBufferObject, Vertex};
 use anyhow::{anyhow, Result};
@@ -29,7 +29,7 @@ impl AshBuffers {
                 .instance
                 .get_physical_device_memory_properties(context.physical_device)
         };
-        let command_pool = AshPresenter::create_command_pool(
+        let command_pool = AshFrameInfo::create_command_pool(
             device,
             &context.queue_family,
             vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
@@ -316,7 +316,7 @@ impl AshBuffers {
         Ok((texture_image, texture_image_memory))
     }
 
-    pub fn update_uniform_buffer(
+    /*pub fn update_uniform_buffer(
         &self,
         device: &ash::Device,
         current_image: usize,
@@ -324,7 +324,6 @@ impl AshBuffers {
         proj: nalgebra::Matrix4<f32>,
     ) -> Result<()> {
         let ubos = [UniformBufferObject {
-            model: nalgebra::Matrix4::<f32>::identity(),
             view: nalgebra::Matrix4::<f32>::identity(),
             proj,
         }];
@@ -344,16 +343,15 @@ impl AshBuffers {
             device.unmap_memory(uniform_buffers_memory[current_image]);
         }
         Ok(())
-    }
-    pub fn update_uniform_buffer_new(
+    }*/
+    /*pub fn update_uniform_buffer_mvp(
         device: &ash::Device,
         uniform_buffers_memory: &Vec<vk::DeviceMemory>,
         current_image: usize,
-        model: nalgebra::Matrix4<f32>,
-        proj: nalgebra::Matrix4<f32>,
         view: nalgebra::Matrix4<f32>,
+        proj: nalgebra::Matrix4<f32>,
     ) -> Result<()> {
-        let ubos = [UniformBufferObject { model, view, proj }];
+        let ubos = [UniformBufferObject { view, proj }];
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
 
         unsafe {
@@ -368,6 +366,35 @@ impl AshBuffers {
 
             device.unmap_memory(uniform_buffers_memory[current_image]);
         }
+        Ok(())
+    }*/
+    pub fn update_global_uniform_buffer(
+        device: &ash::Device,
+        uniform_buffers_memory: &Vec<vk::DeviceMemory>,
+        current_image: usize,
+        projection_view: nalgebra::Matrix4<f32>,
+    ) -> Result<()> {
+        let ubos = [UniformBufferObject {
+            projection_view,
+            ambient_light_color: nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02),
+            light_position: nalgebra::Vector4::<f32>::new(-1.0, -1.0, -1.0, 0.0),
+            light_color: nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 1.0),
+        }];
+        let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
+
+        unsafe {
+            let data_ptr = device.map_memory(
+                uniform_buffers_memory[current_image],
+                0,
+                buffer_size,
+                vk::MemoryMapFlags::empty(),
+            )? as *mut UniformBufferObject;
+
+            data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
+
+            device.unmap_memory(uniform_buffers_memory[current_image]);
+        }
+
         Ok(())
     }
     pub fn create_texture_image_bak(

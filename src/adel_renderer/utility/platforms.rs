@@ -48,7 +48,8 @@ pub fn required_extension_names() -> Vec<*const i8> {
 }
 // ------------------------------------------------------------------------
 
-// create surface ---------------------------------------------------------
+// create surface X11 winit------------------------------------------------
+// TODO: Implement Wayland Unix Creation
 #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
 pub unsafe fn create_surface(
     entry: &ash::Entry,
@@ -56,7 +57,7 @@ pub unsafe fn create_surface(
     window: &winit::window::Window,
 ) -> Result<vk::SurfaceKHR, vk::Result> {
     use std::ptr;
-    use winit::platform::unix::WindowExtUnix;
+    use winit::platform::x11::WindowExtX11;
 
     let x11_display = window.xlib_display().unwrap();
     let x11_window = window.xlib_window().unwrap();

@@ -7,20 +7,46 @@ use crate::adel_renderer::definitions::UniformBufferObject;
 pub struct AshDescriptors {
     descriptor_pool: vk::DescriptorPool,
     descriptor_set_layout: vk::DescriptorSetLayout,
+    pub global_descriptor_sets: Vec<vk::DescriptorSet>,
 }
 
 impl AshDescriptors {
     pub fn new(
         device: &ash::Device,
         descriptor_set_layout: vk::DescriptorSetLayout,
+        uniform_buffers: &Vec<vk::Buffer>,
     ) -> Result<AshDescriptors> {
-        let descriptor_pool = AshDescriptors::create_descriptor_pool(&device)?;
+        //let descriptor_pool = AshDescriptors::create_descriptor_pool_ubo_sampler(&device)?;
+        let descriptor_pool = AshDescriptors::create_descriptor_pool_ubo(&device)?;
+        let global_descriptor_sets = AshDescriptors::create_descriptor_sets_uniform(
+            device,
+            descriptor_pool,
+            descriptor_set_layout,
+            uniform_buffers,
+        )?;
         Ok(Self {
             descriptor_pool,
             descriptor_set_layout: descriptor_set_layout.clone(),
+            global_descriptor_sets,
         })
     }
-    fn create_descriptor_pool(device: &ash::Device) -> Result<vk::DescriptorPool> {
+    #[allow(dead_code)]
+    fn create_descriptor_pool_ubo(device: &ash::Device) -> Result<vk::DescriptorPool> {
+        let uniform_size = vk::DescriptorPoolSize::builder()
+            .ty(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
+            .build();
+        let pool_size = &[uniform_size];
+        let descriptor_pool_create_info = vk::DescriptorPoolCreateInfo::builder()
+            .pool_sizes(pool_size)
+            .max_sets(MAX_FRAMES_IN_FLIGHT as u32)
+            .build();
+        let descriptor_pool =
+            unsafe { device.create_descriptor_pool(&descriptor_pool_create_info, None)? };
+        Ok(descriptor_pool)
+    }
+    #[allow(dead_code)]
+    fn create_descriptor_pool_ubo_sampler(device: &ash::Device) -> Result<vk::DescriptorPool> {
         let uniform_size = vk::DescriptorPoolSize::builder()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
@@ -58,6 +84,7 @@ impl AshDescriptors {
         for (i, &descriptor_set) in descriptor_sets.iter().enumerate() {
             let descriptor_buffer_info = [vk::DescriptorBufferInfo::builder()
                 .buffer(uniform_buffers[i])
+                // TODO: As DescriptorSets may differ when using multiple these values will need to be passed in
                 .range(std::mem::size_of::<UniformBufferObject>() as u64)
                 .offset(0)
                 .build()];

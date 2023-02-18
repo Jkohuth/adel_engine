@@ -1,4 +1,4 @@
-use crate::adel_renderer::definitions::Vertex;
+use crate::adel_renderer::definitions::{PushConstantData, Vertex};
 use anyhow::Result;
 use ash::vk;
 use inline_spirv::include_spirv;
@@ -20,7 +20,8 @@ impl AshPipeline {
         extent: vk::Extent2D,
     ) -> Result<Self> {
         let render_pass = AshPipeline::create_render_pass(&device, surface_format, depth_format)?;
-        let descriptor_set_layout = AshPipeline::create_descriptor_set_layout(&device)?;
+        //let descriptor_set_layout = AshPipeline::create_descriptor_set_layout_ubo_texture(&device)?;
+        let descriptor_set_layout = AshPipeline::create_descriptor_set_layout_ubo(&device)?;
         let pipeline_layout = AshPipeline::create_pipeline_layout(&device, descriptor_set_layout)?;
         let graphics_pipeline = AshPipeline::create_graphics_pipeline(
             &device,
@@ -119,7 +120,7 @@ impl AshPipeline {
             .binding(0)
             .descriptor_count(1)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .stage_flags(vk::ShaderStageFlags::ALL_GRAPHICS)
             .build();
         let bindings = &[ubo_layout_bindings];
         let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
@@ -129,7 +130,10 @@ impl AshPipeline {
             unsafe { device.create_descriptor_set_layout(&descriptor_layout_info, None)? };
         Ok(descriptor_set_layout)
     }
-    fn create_descriptor_set_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    #[allow(dead_code)]
+    fn create_descriptor_set_layout_ubo_texture(
+        device: &ash::Device,
+    ) -> Result<vk::DescriptorSetLayout> {
         let ubo_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_count(1)
@@ -155,14 +159,14 @@ impl AshPipeline {
         device: &ash::Device,
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> Result<vk::PipelineLayout> {
-        //let push_constant_range = [vk::PushConstantRange::builder()
-        //    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-        //    .offset(0)
-        //    .size(std::mem::size_of::<PushConstantData>() as u32)
-        //    .build()];
+        let push_constant_range = [vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+            .offset(0)
+            .size(std::mem::size_of::<PushConstantData>() as u32)
+            .build()];
         let set_layouts = [descriptor_set_layout];
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
-            //    .push_constant_ranges(&push_constant_range)
+            .push_constant_ranges(&push_constant_range)
             .set_layouts(&set_layouts)
             .build();
 
@@ -186,11 +190,19 @@ impl AshPipeline {
         swapchain_extent: vk::Extent2D,
     ) -> Result<vk::Pipeline> {
         // Create Shader Modules
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/push.frag", frag, glsl, entry="main");
-        //let vert_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/uniform_buffer.vert", vert, glsl, entry="main");
-        //let frag_spv: &'static [u32] = include_spirv!("src/adel_renderer/shaders/uniform_buffer.frag", frag, glsl, entry="main");
         let vert_spv: &'static [u32] = include_spirv!(
+            "src/adel_renderer/shaders/uniform_buffer.vert",
+            vert,
+            glsl,
+            entry = "main"
+        );
+        let frag_spv: &'static [u32] = include_spirv!(
+            "src/adel_renderer/shaders/uniform_buffer.frag",
+            frag,
+            glsl,
+            entry = "main"
+        );
+        /* let vert_spv: &'static [u32] = include_spirv!(
             "src/adel_renderer/shaders/texture.vert",
             vert,
             glsl,
@@ -201,7 +213,7 @@ impl AshPipeline {
             frag,
             glsl,
             entry = "main"
-        );
+        ); */
         let vert_shader = AshPipeline::create_shader_module(&device, vert_spv)?;
         let frag_shader = AshPipeline::create_shader_module(&device, frag_spv)?;
 

@@ -37,16 +37,17 @@ impl System for KeyboardHandler {
 
         let dims = window.inner_size();
         let aspect_ratio = dims.width as f32 / dims.height as f32;
-        camera.set_perspective_projection((50.0f32).to_radians(), aspect_ratio, 0.1, 10.0);
+        camera.set_perspective_projection((50.0f32).to_radians(), aspect_ratio, 0.1, 100.0);
 
         for i in input_ref.iter().enumerate() {
             if let Some(_input_entity) = i.1 {
                 if let Some(camera_transform) = &mut transform_ref[i.0] {
-                    camera.set_view_target(
+                    camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
+                    /*camera.set_view_target(
                         camera_transform.translation,
                         nalgebra::Vector3::<f32>::new(0.0, 0.0, 0.0),
                         Some(nalgebra::Vector3::<f32>::new(0.0, 0.0, 1.0)),
-                    );
+                    );*/
                 }
             }
         }
@@ -68,11 +69,12 @@ impl System for KeyboardHandler {
             if let Some(_input_entity) = i.1 {
                 if let Some(camera_transform) = &mut transform_ref[i.0] {
                     move_in_plane_xz(&input_consumer.pressed, world.get_dt(), camera_transform);
-                    camera.set_view_target(
+                    camera.set_view_yxz(camera_transform.translation, camera_transform.rotation);
+                    /*camera.set_view_target(
                         camera_transform.translation,
                         nalgebra::Vector3::<f32>::new(0.0, 0.0, 0.0),
                         Some(nalgebra::Vector3::<f32>::new(0.0, 0.0, 1.0)),
-                    );
+                    );*/
                 }
             }
         }
