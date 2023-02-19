@@ -6,7 +6,8 @@ layout(location = 2) in vec3 frag_normal_world;
 layout(location = 0) out vec4 out_color;
 
 layout(set = 0, binding = 0) uniform UniformBufferObject {
-  mat4 projection_view;
+  mat4 projection;
+  mat4 view;
   vec4 ambient_light_color; // w is intensity
   vec4 light_position;      // Vec4 used for alignment
   vec4 light_color;

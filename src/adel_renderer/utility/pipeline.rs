@@ -5,21 +5,17 @@ use inline_spirv::include_spirv;
 use std::ffi::CString;
 
 pub struct AshPipeline {
-    render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
     graphics_pipeline: vk::Pipeline,
     pipeline_layout: vk::PipelineLayout,
-    depth_format: vk::Format,
 }
 
 impl AshPipeline {
     pub fn new(
         device: &ash::Device,
-        surface_format: vk::Format,
-        depth_format: vk::Format,
+        render_pass: vk::RenderPass,
         extent: vk::Extent2D,
     ) -> Result<Self> {
-        let render_pass = AshPipeline::create_render_pass(&device, surface_format, depth_format)?;
         //let descriptor_set_layout = AshPipeline::create_descriptor_set_layout_ubo_texture(&device)?;
         let descriptor_set_layout = AshPipeline::create_descriptor_set_layout_ubo(&device)?;
         let pipeline_layout = AshPipeline::create_pipeline_layout(&device, descriptor_set_layout)?;
@@ -31,87 +27,10 @@ impl AshPipeline {
         )?;
         //let (graphics_pipeline, pipeline_layout) = AshPipeline::create_graphics_pipeline(&device, render_pass.clone(), descriptor_set_layout, extent);
         Ok(Self {
-            render_pass,
             descriptor_set_layout,
             graphics_pipeline,
             pipeline_layout,
-            depth_format,
         })
-    }
-
-    pub fn create_render_pass(
-        device: &ash::Device,
-        surface_format: vk::Format,
-        depth_format: vk::Format,
-    ) -> Result<vk::RenderPass> {
-        let color_attachment = vk::AttachmentDescription::builder()
-            .format(surface_format)
-            .flags(vk::AttachmentDescriptionFlags::empty())
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            .build();
-        let depth_stencil_attachment = vk::AttachmentDescription::builder()
-            .format(depth_format)
-            .flags(vk::AttachmentDescriptionFlags::empty())
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-            .build();
-
-        let color_attachment_ref = vk::AttachmentReference::builder()
-            .attachment(0)
-            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .build();
-
-        let depth_stencil_attachment_ref = vk::AttachmentReference::builder()
-            .attachment(1)
-            .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-            .build();
-
-        let subpasses = [vk::SubpassDescription::builder()
-            .color_attachments(&[color_attachment_ref])
-            .depth_stencil_attachment(&depth_stencil_attachment_ref)
-            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .build()];
-
-        let render_pass_attachments = [color_attachment, depth_stencil_attachment];
-
-        let subpass_dependencies = [vk::SubpassDependency::builder()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
-            .src_stage_mask(
-                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
-                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
-            )
-            .dst_stage_mask(
-                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
-                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
-            )
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_access_mask(
-                vk::AccessFlags::COLOR_ATTACHMENT_WRITE
-                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-            )
-            .dependency_flags(vk::DependencyFlags::empty())
-            .build()];
-
-        let renderpass_create_info = vk::RenderPassCreateInfo::builder()
-            .attachments(&render_pass_attachments)
-            .subpasses(&subpasses)
-            .dependencies(&subpass_dependencies)
-            .build();
-
-        let render_pass = unsafe { device.create_render_pass(&renderpass_create_info, None)? };
-        Ok(render_pass)
     }
 
     #[allow(dead_code)]
@@ -363,15 +282,7 @@ impl AshPipeline {
         }
         Ok(graphics_pipelines[0])
     }
-    pub fn recreate_render_pass(&mut self, device: &ash::Device, format: vk::Format) -> Result<()> {
-        let render_pass = AshPipeline::create_render_pass(&device, format, self.depth_format)?;
-        self.render_pass = render_pass;
-        Ok(())
-    }
 
-    pub fn render_pass(&self) -> vk::RenderPass {
-        self.render_pass
-    }
     pub fn graphics_pipeline(&self) -> vk::Pipeline {
         self.graphics_pipeline
     }
@@ -380,9 +291,6 @@ impl AshPipeline {
     }
     pub fn descriptor_set_layout(&self) -> vk::DescriptorSetLayout {
         self.descriptor_set_layout
-    }
-    pub unsafe fn destroy_render_pass(&mut self, device: &ash::Device) {
-        device.destroy_render_pass(self.render_pass, None);
     }
     pub unsafe fn destroy_descriptor_set_layout(&mut self, device: &ash::Device) {
         device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);

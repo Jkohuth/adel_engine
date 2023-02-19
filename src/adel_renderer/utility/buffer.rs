@@ -1,16 +1,15 @@
 use ash::vk;
 
+use super::command_buffers::AshCommandBuffers;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
-use super::frame_info::AshFrameInfo;
 use super::{context::AshContext, swapchain::AshSwapchain};
 use crate::adel_renderer::definitions::{UniformBufferObject, Vertex};
 use anyhow::{anyhow, Result};
 use image::DynamicImage;
 use std::path::Path;
-pub struct AshBuffers {
-    physical_device_memory_properties: vk::PhysicalDeviceMemoryProperties,
-    command_pool: vk::CommandPool,
-    submit_queue: vk::Queue,
+pub struct AshBuffer {
+    buffer: vk::Buffer,
+    buffer_memory: vk::DeviceMemory,
 }
 
 /*
@@ -18,28 +17,7 @@ pub struct AshBuffers {
     Vertex/Index/Texture Buffer
 
 */
-impl AshBuffers {
-    pub fn new(
-        context: &AshContext,
-        device: &ash::Device,
-        submit_queue: vk::Queue,
-    ) -> Result<Self> {
-        let physical_device_memory_properties = unsafe {
-            context
-                .instance
-                .get_physical_device_memory_properties(context.physical_device)
-        };
-        let command_pool = AshFrameInfo::create_command_pool(
-            device,
-            &context.queue_family,
-            vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
-        )?;
-        Ok(Self {
-            physical_device_memory_properties,
-            command_pool,
-            submit_queue,
-        })
-    }
+impl AshBuffer {
     pub fn create_buffer(
         context: &AshContext,
         device: &ash::Device,
@@ -88,7 +66,7 @@ impl AshBuffers {
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) -> Result<()> {
-        let command_buffer = AshBuffers::begin_single_time_commands(device, command_pool)?;
+        let command_buffer = AshBuffer::begin_single_time_commands(device, command_pool)?;
 
         let copy_region = [vk::BufferCopy::builder()
             .src_offset(0)
@@ -99,7 +77,7 @@ impl AshBuffers {
         unsafe {
             device.cmd_copy_buffer(command_buffer, *src_buffer, *dst_buffer, &copy_region);
         };
-        AshBuffers::end_single_time_commands(device, command_buffer, command_pool, submit_queue)?;
+        AshBuffer::end_single_time_commands(device, command_buffer, command_pool, submit_queue)?;
         Ok(())
     }
     pub fn create_vertex_buffer(
@@ -108,9 +86,9 @@ impl AshBuffers {
         vertices: &Vec<Vertex>,
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
-    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+    ) -> Result<Self> {
         let buffer_size = (vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;
-        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(
+        let (staging_buffer, staging_buffer_memory) = AshBuffer::create_buffer(
             context,
             device,
             buffer_size,
@@ -130,14 +108,14 @@ impl AshBuffers {
 
             device.unmap_memory(staging_buffer_memory);
         }
-        let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_buffer(
+        let (vertex_buffer, vertex_buffer_memory) = AshBuffer::create_buffer(
             context,
             device,
             buffer_size,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
-        AshBuffers::copy_buffer(
+        AshBuffer::copy_buffer(
             device,
             &staging_buffer,
             &vertex_buffer,
@@ -151,7 +129,10 @@ impl AshBuffers {
             device.free_memory(staging_buffer_memory, None);
         }
 
-        Ok((vertex_buffer, vertex_buffer_memory))
+        Ok(Self {
+            buffer: vertex_buffer,
+            buffer_memory: vertex_buffer_memory,
+        })
     }
 
     pub fn create_index_buffer(
@@ -160,10 +141,10 @@ impl AshBuffers {
         indicies: &Vec<u32>,
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
-    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+    ) -> Result<Self> {
         let buffer_size = (indicies.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
         //log::info!("JAKOB buffer 1 {:?} buffer 2 {:?}", buffer_size, buffer_size2);
-        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(
+        let (staging_buffer, staging_buffer_memory) = AshBuffer::create_buffer(
             context,
             device,
             buffer_size,
@@ -183,14 +164,14 @@ impl AshBuffers {
 
             device.unmap_memory(staging_buffer_memory);
         }
-        let (index_buffer, index_buffer_memory) = AshBuffers::create_buffer(
+        let (index_buffer, index_buffer_memory) = AshBuffer::create_buffer(
             context,
             device,
             buffer_size,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
-        AshBuffers::copy_buffer(
+        AshBuffer::copy_buffer(
             device,
             &staging_buffer,
             &index_buffer,
@@ -204,16 +185,16 @@ impl AshBuffers {
             device.free_memory(staging_buffer_memory, None);
         }
 
-        Ok((index_buffer, index_buffer_memory))
+        Ok(Self {
+            buffer: index_buffer,
+            buffer_memory: index_buffer_memory,
+        })
     }
-    pub fn physical_device_memory_properties(&self) -> vk::PhysicalDeviceMemoryProperties {
-        self.physical_device_memory_properties
+    pub fn buffer(&self) -> vk::Buffer {
+        self.buffer
     }
-    pub fn command_pool(&self) -> &vk::CommandPool {
-        &self.command_pool
-    }
-    pub fn submit_queue(&self) -> vk::Queue {
-        self.submit_queue
+    pub fn memory(&self) -> vk::DeviceMemory {
+        self.buffer_memory
     }
     /*
         Descriptor Set Buffers
@@ -227,7 +208,7 @@ impl AshBuffers {
         let mut uniform_buffers: Vec<vk::Buffer> = Vec::new();
         let mut uniform_buffers_memory: Vec<vk::DeviceMemory> = Vec::new();
         for _ in 0..MAX_FRAMES_IN_FLIGHT {
-            let (uniform_buffer, uniform_buffer_memory) = AshBuffers::create_buffer(
+            let (uniform_buffer, uniform_buffer_memory) = AshBuffer::create_buffer(
                 context,
                 device,
                 buffer_size,
@@ -251,7 +232,7 @@ impl AshBuffers {
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) -> Result<(vk::Image, vk::DeviceMemory)> {
-        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(
+        let (staging_buffer, staging_buffer_memory) = AshBuffer::create_buffer(
             context,
             device,
             image_size,
@@ -271,7 +252,7 @@ impl AshBuffers {
 
             device.unmap_memory(staging_buffer_memory);
         }
-        let (texture_image, texture_image_memory) = AshBuffers::create_image(
+        let (texture_image, texture_image_memory) = AshBuffer::create_image(
             context,
             device,
             image_width,
@@ -282,7 +263,7 @@ impl AshBuffers {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        AshBuffers::transition_image_layout(
+        AshBuffer::transition_image_layout(
             device,
             texture_image,
             vk::Format::R8G8B8A8_SRGB,
@@ -291,7 +272,7 @@ impl AshBuffers {
             command_pool,
             submit_queue,
         )?;
-        AshBuffers::copy_buffer_to_image(
+        AshBuffer::copy_buffer_to_image(
             device,
             staging_buffer,
             texture_image,
@@ -300,7 +281,7 @@ impl AshBuffers {
             command_pool,
             submit_queue,
         )?;
-        AshBuffers::transition_image_layout(
+        AshBuffer::transition_image_layout(
             device,
             texture_image,
             vk::Format::R8G8B8A8_SRGB,
@@ -372,10 +353,12 @@ impl AshBuffers {
         device: &ash::Device,
         uniform_buffers_memory: &Vec<vk::DeviceMemory>,
         current_image: usize,
-        projection_view: nalgebra::Matrix4<f32>,
+        projection: nalgebra::Matrix4<f32>,
+        view: nalgebra::Matrix4<f32>,
     ) -> Result<()> {
         let ubos = [UniformBufferObject {
-            projection_view,
+            projection,
+            view,
             ambient_light_color: nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02),
             light_position: nalgebra::Vector4::<f32>::new(-1.0, -1.0, -1.0, 0.0),
             light_color: nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 1.0),
@@ -413,7 +396,7 @@ impl AshBuffers {
         // This crushes 16/32 bit pixel definition to 8 bit
         let image_data = image_object.into_rgba8().into_raw();
 
-        let (staging_buffer, staging_buffer_memory) = AshBuffers::create_buffer(
+        let (staging_buffer, staging_buffer_memory) = AshBuffer::create_buffer(
             context,
             device,
             image_size,
@@ -433,7 +416,7 @@ impl AshBuffers {
 
             device.unmap_memory(staging_buffer_memory);
         }
-        let (texture_image, texture_image_memory) = AshBuffers::create_image(
+        let (texture_image, texture_image_memory) = AshBuffer::create_image(
             context,
             device,
             image_width,
@@ -444,7 +427,7 @@ impl AshBuffers {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        AshBuffers::transition_image_layout(
+        AshBuffer::transition_image_layout(
             device,
             texture_image,
             vk::Format::R8G8B8A8_SRGB,
@@ -453,7 +436,7 @@ impl AshBuffers {
             command_pool,
             submit_queue,
         )?;
-        AshBuffers::copy_buffer_to_image(
+        AshBuffer::copy_buffer_to_image(
             device,
             staging_buffer,
             texture_image,
@@ -462,7 +445,7 @@ impl AshBuffers {
             command_pool,
             submit_queue,
         )?;
-        AshBuffers::transition_image_layout(
+        AshBuffer::transition_image_layout(
             device,
             texture_image,
             vk::Format::R8G8B8A8_SRGB,
@@ -593,7 +576,7 @@ impl AshBuffers {
                 _ => return Err(anyhow!("Unsupported image layout transition")),
             };
 
-        let command_buffer = AshBuffers::begin_single_time_commands(device, command_pool)?;
+        let command_buffer = AshBuffer::begin_single_time_commands(device, command_pool)?;
         let subresource = vk::ImageSubresourceRange::builder()
             //.aspect_mask(vk::ImageAspectFlags::COLOR)
             .aspect_mask(aspect_mask)
@@ -623,7 +606,7 @@ impl AshBuffers {
                 &[barrier],
             );
         }
-        AshBuffers::end_single_time_commands(device, command_buffer, command_pool, submit_queue)?;
+        AshBuffer::end_single_time_commands(device, command_buffer, command_pool, submit_queue)?;
         Ok(())
     }
     pub fn create_texture_sample(device: &ash::Device) -> Result<vk::Sampler> {
@@ -654,7 +637,7 @@ impl AshBuffers {
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) -> Result<()> {
-        let command_buffer = AshBuffers::begin_single_time_commands(device, command_pool)?;
+        let command_buffer = AshBuffer::begin_single_time_commands(device, command_pool)?;
         let subresource = vk::ImageSubresourceLayers::builder()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
             .mip_level(0)
@@ -687,13 +670,9 @@ impl AshBuffers {
             );
         }
 
-        AshBuffers::end_single_time_commands(device, command_buffer, command_pool, submit_queue)?;
+        AshBuffer::end_single_time_commands(device, command_buffer, command_pool, submit_queue)?;
         Ok(())
     }
-    pub unsafe fn destroy_command_pool(&mut self, device: &ash::Device) {
-        device.destroy_command_pool(self.command_pool, None);
-    }
-
     /*
         Buffer Utility functions
     */

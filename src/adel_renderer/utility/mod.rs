@@ -1,9 +1,9 @@
-pub mod buffers;
+pub mod buffer;
+pub mod command_buffers;
 pub mod constants;
 pub mod context;
 pub mod debug;
 pub mod descriptors;
-pub mod frame_info;
 pub mod model;
 pub mod pipeline;
 pub mod platforms;
