@@ -12,16 +12,18 @@ use crate::adel_tools::as_bytes;
 // TODO: Create a prelude and add these to it
 use super::definitions::{PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
-use crate::adel_renderer::utility::{
-    buffer::AshBuffer,
-    command_buffers::AshCommandBuffers,
-    constants::*,
-    context::{create_logical_device, AshContext},
-    descriptors::AshDescriptors,
-    model::*,
-    pipeline::AshPipeline,
-    swapchain::AshSwapchain,
-    sync::SyncObjects,
+use crate::adel_renderer::{
+    simple_renderer::SimpleRenderer,
+    utility::{
+        buffer::AshBuffer,
+        command_buffers::AshCommandBuffers,
+        constants::*,
+        context::{create_logical_device, AshContext},
+        descriptors::AshDescriptors,
+        model::*,
+        swapchain::AshSwapchain,
+        sync::SyncObjects,
+    },
 };
 
 use std::sync::mpsc;
@@ -37,11 +39,11 @@ pub struct RendererAsh {
 
     swapchain: AshSwapchain,
 
-    pipeline: AshPipeline,
     command_buffers: AshCommandBuffers,
     uniform_buffers: Vec<vk::Buffer>,
     uniform_buffers_memory: Vec<vk::DeviceMemory>,
     descriptors: AshDescriptors,
+    simple_renderer: SimpleRenderer,
 
     sync_objects: SyncObjects,
     current_frame: usize,
@@ -63,12 +65,16 @@ impl RendererAsh {
         let window_size = (window.inner_size().width, window.inner_size().height);
         let swapchain = AshSwapchain::new(&context, &device, window_size)?;
 
-        let pipeline = AshPipeline::new(&device, swapchain.render_pass, swapchain.extent())?;
-        let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain, &pipeline)?;
+        let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain)?;
         let (uniform_buffers, uniform_buffers_memory) =
             AshBuffer::create_uniform_buffers(&context, &device)?;
-        let descriptors =
-            AshDescriptors::new(&device, pipeline.descriptor_set_layout(), &uniform_buffers)?;
+        let descriptors = AshDescriptors::new(&device, &uniform_buffers)?;
+        let simple_renderer = SimpleRenderer::new(
+            &device,
+            descriptors.descriptor_set_layout(),
+            swapchain.render_pass(),
+            swapchain.extent(),
+        )?;
 
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
 
@@ -77,11 +83,11 @@ impl RendererAsh {
             context,
             device,
             swapchain,
-            pipeline,
             command_buffers,
             uniform_buffers,
             uniform_buffers_memory,
             descriptors,
+            simple_renderer,
             sync_objects,
             current_frame: 0,
             is_framebuffer_resized: false,
@@ -199,7 +205,7 @@ impl RendererAsh {
     fn end_frame(
         &mut self,
         image_index: u32,
-        wait_fences: [vk::Fence; 1],
+        wait_fence: [vk::Fence; 1],
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
         unsafe {
@@ -218,7 +224,7 @@ impl RendererAsh {
             .build()];
 
         unsafe {
-            self.device.reset_fences(&wait_fences)?;
+            self.device.reset_fences(&wait_fence)?;
 
             self.device.queue_submit(
                 self.swapchain.graphics_queue,
@@ -257,22 +263,19 @@ impl RendererAsh {
         Ok(())
     }
 
+    /*
     // TODO: Every Model should have it's own model Matrix but I'm simplifying things for now
-    pub fn draw_frame(&mut self, models: Vec<(&ModelComponent, PushConstantData)>) -> Result<()> {
-        // Begin_frame requires a return of Image_index, wait_fences and command_buffer
-        let (wait_fences, image_index, command_buffer) = self.begin_frame()?;
-        self.begin_swapchain_render_pass(image_index, &command_buffer);
+    pub fn draw_frame(
+        &mut self,
+        command_buffer: vk::CommandBuffer,
+        models: Vec<(&ModelComponent, PushConstantData)>,
+    ) -> Result<()> {
         // Render Objects
         //bind pipeline
         let device_size_offsets: [vk::DeviceSize; 1] = [0];
         let descriptor_sets_to_bind = [self.descriptors.global_descriptor_sets[self.current_frame]];
         //let descriptor_sets = self.buffers.descriptor_sets.as_ref().unwrap();
         unsafe {
-            self.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline.graphics_pipeline(),
-            );
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -280,6 +283,11 @@ impl RendererAsh {
                 0,
                 &descriptor_sets_to_bind,
                 &[],
+            );
+            self.device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline.graphics_pipeline(),
             );
             for model in models.iter() {
                 self.device.cmd_bind_vertex_buffers(
@@ -307,10 +315,9 @@ impl RendererAsh {
             }
         }
 
-        self.end_swapchain_render_pass(&command_buffer);
-        self.end_frame(image_index, wait_fences, command_buffer)?;
         Ok(())
     }
+    */
 
     fn recreate_swapchain(&mut self) -> Result<()> {
         unsafe {
@@ -319,14 +326,9 @@ impl RendererAsh {
                 .expect("Failed to wait device idle!")
         };
         self.destroy_swapchain_resources();
-        let width_height = (
-            self.window_size.0,
-            self.window_size.1, //self.window.inner_size().width,
-                                //self.window.inner_size().height,
-        );
         self.context
             .surface_info
-            .update_screen_width_height(width_height.0, width_height.1);
+            .update_screen_width_height(self.window_size.0, self.window_size.1);
         self.swapchain
             .recreate_swapchain(&self.context, &self.device, self.window_size)?;
         self.swapchain
@@ -388,8 +390,6 @@ impl System for RendererAsh {
     fn run(&mut self, world: &mut World) {
         self.consume_events();
 
-        let models = world.borrow_component::<ModelComponent>().unwrap();
-        let mut transform_component = world.borrow_component_mut::<TransformComponent>().unwrap();
         let camera = world.get_resource::<Camera>().unwrap();
         let projection = camera.get_projection();
         let view = camera.get_view();
@@ -401,6 +401,9 @@ impl System for RendererAsh {
             view,
         )
         .expect("Failed to update Uniform Buffers");
+
+        let models = world.borrow_component::<ModelComponent>().unwrap();
+        let mut transform_component = world.borrow_component_mut::<TransformComponent>().unwrap();
         let mut model_push_vec: Vec<(&ModelComponent, PushConstantData)> = Vec::new();
         for i in models.iter().enumerate() {
             if let Some(buffer) = i.1 {
@@ -415,8 +418,22 @@ impl System for RendererAsh {
                 }
             }
         }
-        self.draw_frame(model_push_vec)
+
+        let (wait_fence, image_index, command_buffer) =
+            self.begin_frame().expect("Failed to begin frame");
+        self.begin_swapchain_render_pass(image_index, &command_buffer);
+        self.simple_renderer
+            .render(
+                &self.device,
+                command_buffer,
+                model_push_vec,
+                self.current_frame,
+                &self.descriptors,
+            )
             .expect("Failed to draw frame");
+        self.end_swapchain_render_pass(&command_buffer);
+        self.end_frame(image_index, wait_fence, command_buffer)
+            .expect("Failed to end frame");
     }
     // TODO: When Uniform buffers, Textures, and Models are abstracted to components, they need to be freed here
     fn shutdown(&mut self, world: &mut World) {
@@ -455,18 +472,22 @@ impl Drop for RendererAsh {
                 self.device
                     .free_memory(self.uniform_buffers_memory[i.0], None);
             }
-            self.descriptors.destroy_descriptor_pool(&self.device);
+            self.simple_renderer.destroy_simple_renderer(&self.device);
+            self.descriptors.destroy_descriptors(&self.device);
             self.command_buffers.destroy_all(&self.device);
 
-            // Destorys Swapchain and ImageViews
-            self.pipeline.destroy_descriptor_set_layout(&self.device);
-
-            // Destroys Pipeline and PipelineLayout
-            self.pipeline.destroy_pipeline(&self.device);
             self.swapchain.destroy_ashswapchain(&self.device);
 
             self.device.destroy_device(None);
             self.context.destroy_context();
         }
     }
+}
+struct FrameInfo<'a> {
+    wait_fence: [vk::Fence; 1],
+    image_index: u32,
+    command_buffer: vk::CommandBuffer,
+    descriptor_set: [vk::DescriptorSet; 1],
+    dt: f32,
+    models: &'a Vec<(ModelComponent, PushConstantData)>,
 }

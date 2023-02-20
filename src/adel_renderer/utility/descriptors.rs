@@ -11,11 +11,8 @@ pub struct AshDescriptors {
 }
 
 impl AshDescriptors {
-    pub fn new(
-        device: &ash::Device,
-        descriptor_set_layout: vk::DescriptorSetLayout,
-        uniform_buffers: &Vec<vk::Buffer>,
-    ) -> Result<AshDescriptors> {
+    pub fn new(device: &ash::Device, uniform_buffers: &Vec<vk::Buffer>) -> Result<AshDescriptors> {
+        let descriptor_set_layout = AshDescriptors::create_descriptor_set_layout_ubo(device)?;
         //let descriptor_pool = AshDescriptors::create_descriptor_pool_ubo_sampler(&device)?;
         let descriptor_pool = AshDescriptors::create_descriptor_pool_ubo(&device)?;
         let global_descriptor_sets = AshDescriptors::create_descriptor_sets_uniform(
@@ -29,6 +26,21 @@ impl AshDescriptors {
             descriptor_set_layout: descriptor_set_layout.clone(),
             global_descriptor_sets,
         })
+    }
+    fn create_descriptor_set_layout_ubo(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+        let ubo_layout_bindings = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .stage_flags(vk::ShaderStageFlags::ALL_GRAPHICS)
+            .build();
+        let bindings = &[ubo_layout_bindings];
+        let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(bindings)
+            .build();
+        let descriptor_set_layout =
+            unsafe { device.create_descriptor_set_layout(&descriptor_layout_info, None)? };
+        Ok(descriptor_set_layout)
     }
     #[allow(dead_code)]
     fn create_descriptor_pool_ubo(device: &ash::Device) -> Result<vk::DescriptorPool> {
@@ -188,5 +200,12 @@ impl AshDescriptors {
     }
     pub unsafe fn destroy_descriptor_pool(&mut self, device: &ash::Device) {
         device.destroy_descriptor_pool(self.descriptor_pool, None);
+    }
+    pub unsafe fn destroy_descriptor_set_layout(&mut self, device: &ash::Device) {
+        device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+    }
+    pub unsafe fn destroy_descriptors(&mut self, device: &ash::Device) {
+        self.destroy_descriptor_pool(device);
+        self.destroy_descriptor_set_layout(device);
     }
 }

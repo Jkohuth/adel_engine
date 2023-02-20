@@ -14,7 +14,6 @@ impl AshCommandBuffers {
         device: &ash::Device,
         context: &AshContext,
         swapchain: &AshSwapchain,
-        pipeline: &AshPipeline,
     ) -> Result<Self> {
         let command_pool = AshCommandBuffers::create_command_pool(
             &device,
