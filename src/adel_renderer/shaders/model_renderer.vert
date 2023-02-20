@@ -9,7 +9,7 @@ layout(location = 0) out vec3 frag_color;
 layout(location = 1) out vec3 frag_pos_world;
 layout(location = 2) out vec3 frag_normal_world;
 
-layout(set = 0, binding = 0) uniform UniformBufferObject {
+layout(set = 0, binding = 0) uniform GlobalUbo {
   mat4 projection;
   mat4 view;
   vec4 ambient_light_color; // w is intensity

@@ -13,6 +13,7 @@ use crate::adel_tools::as_bytes;
 use super::definitions::{PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
 use crate::adel_renderer::{
+    point_light_renderer::PointLightRenderer,
     simple_renderer::SimpleRenderer,
     utility::{
         buffer::AshBuffer,
@@ -44,6 +45,7 @@ pub struct RendererAsh {
     uniform_buffers_memory: Vec<vk::DeviceMemory>,
     descriptors: AshDescriptors,
     simple_renderer: SimpleRenderer,
+    point_light_renderer: PointLightRenderer,
 
     sync_objects: SyncObjects,
     current_frame: usize,
@@ -76,6 +78,12 @@ impl RendererAsh {
             swapchain.extent(),
         )?;
 
+        let point_light_renderer = PointLightRenderer::new(
+            &device,
+            descriptors.descriptor_set_layout(),
+            swapchain.render_pass(),
+            swapchain.extent(),
+        )?;
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
 
         Ok(Self {
@@ -88,6 +96,7 @@ impl RendererAsh {
             uniform_buffers_memory,
             descriptors,
             simple_renderer,
+            point_light_renderer,
             sync_objects,
             current_frame: 0,
             is_framebuffer_resized: false,
@@ -431,6 +440,14 @@ impl System for RendererAsh {
                 &self.descriptors,
             )
             .expect("Failed to draw frame");
+        self.point_light_renderer
+            .render(
+                &self.device,
+                command_buffer,
+                self.current_frame,
+                &self.descriptors,
+            )
+            .expect("Failed to draw frame");
         self.end_swapchain_render_pass(&command_buffer);
         self.end_frame(image_index, wait_fence, command_buffer)
             .expect("Failed to end frame");
@@ -472,6 +489,8 @@ impl Drop for RendererAsh {
                 self.device
                     .free_memory(self.uniform_buffers_memory[i.0], None);
             }
+            self.point_light_renderer
+                .destroy_point_light_renderer(&self.device);
             self.simple_renderer.destroy_simple_renderer(&self.device);
             self.descriptors.destroy_descriptors(&self.device);
             self.command_buffers.destroy_all(&self.device);

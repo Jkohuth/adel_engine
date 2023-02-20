@@ -1,21 +1,15 @@
-use crate::adel_renderer::definitions::PushConstantData;
-use crate::adel_renderer::definitions::Vertex;
-use crate::adel_renderer::utility::model::ModelComponent;
-use crate::adel_renderer::utility::pipeline::AshPipeline;
-use crate::adel_tools::as_bytes;
+use crate::adel_renderer::utility::{descriptors::AshDescriptors, pipeline::AshPipeline};
 use anyhow::Result;
 use ash::vk;
 use inline_spirv::include_spirv;
 use std::ffi::CString;
 
-use super::utility::descriptors::AshDescriptors;
-
-pub struct SimpleRenderer {
-    pub pipeline_layout: vk::PipelineLayout,
-    pub pipeline: vk::Pipeline,
+pub struct PointLightRenderer {
+    pipeline: vk::Pipeline,
+    pipeline_layout: vk::PipelineLayout,
 }
 
-impl SimpleRenderer {
+impl PointLightRenderer {
     pub fn new(
         device: &ash::Device,
         descriptor_set_layout: vk::DescriptorSetLayout,
@@ -23,9 +17,9 @@ impl SimpleRenderer {
         extent: vk::Extent2D,
     ) -> Result<Self> {
         let pipeline_layout =
-            SimpleRenderer::create_pipeline_layout(device, descriptor_set_layout)?;
+            PointLightRenderer::create_pipeline_layout(device, descriptor_set_layout)?;
         let pipeline =
-            SimpleRenderer::create_pipeline(device, pipeline_layout, render_pass, extent)?;
+            PointLightRenderer::create_pipeline(device, pipeline_layout, render_pass, extent)?;
         Ok(Self {
             pipeline_layout,
             pipeline,
@@ -35,7 +29,6 @@ impl SimpleRenderer {
         &self,
         device: &ash::Device,
         command_buffer: vk::CommandBuffer,
-        models: Vec<(&ModelComponent, PushConstantData)>,
         frame_index: usize,
         descriptors: &AshDescriptors,
     ) -> Result<()> {
@@ -56,29 +49,7 @@ impl SimpleRenderer {
                 &descriptor_sets_to_bind,
                 &[],
             );
-            for model in models.iter() {
-                device.cmd_bind_vertex_buffers(
-                    command_buffer,
-                    0,
-                    &[model.0.vertex_buffer.buffer().clone()],
-                    &device_size_offsets,
-                );
-                device.cmd_bind_index_buffer(
-                    command_buffer,
-                    model.0.index_buffer.buffer().clone(),
-                    0,
-                    vk::IndexType::UINT32,
-                );
-                device.cmd_push_constants(
-                    command_buffer,
-                    self.pipeline_layout,
-                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    0,
-                    as_bytes(&model.1),
-                );
-
-                device.cmd_draw_indexed(command_buffer, model.0.indices_count, 1, 0, 0, 0);
-            }
+            device.cmd_draw(command_buffer, 6, 1, 0, 0);
         }
         Ok(())
     }
@@ -86,14 +57,8 @@ impl SimpleRenderer {
         device: &ash::Device,
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> Result<vk::PipelineLayout> {
-        let push_constant_range = [vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-            .offset(0)
-            .size(std::mem::size_of::<PushConstantData>() as u32)
-            .build()];
         let set_layouts = [descriptor_set_layout];
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
-            .push_constant_ranges(&push_constant_range)
             .set_layouts(&set_layouts)
             .build();
 
@@ -109,13 +74,13 @@ impl SimpleRenderer {
     ) -> Result<vk::Pipeline> {
         // Shader Modules are unique to each Render System. They need to be generated, loaded up into pipeline builder and passed in
         let vert_spv: &'static [u32] = include_spirv!(
-            "src/adel_renderer/shaders/model_renderer.vert",
+            "src/adel_renderer/shaders/point_light.vert",
             vert,
             glsl,
             entry = "main"
         );
         let frag_spv: &'static [u32] = include_spirv!(
-            "src/adel_renderer/shaders/model_renderer.frag",
+            "src/adel_renderer/shaders/point_light.frag",
             frag,
             glsl,
             entry = "main"
@@ -138,8 +103,8 @@ impl SimpleRenderer {
                 .build(),
         ];
         let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_binding_descriptions(&Vertex::binding_descriptions())
-            .vertex_attribute_descriptions(&Vertex::attribute_descriptions())
+            //    .vertex_binding_descriptions(&Vertex::binding_descriptions())
+            //    .vertex_attribute_descriptions(&Vertex::attribute_descriptions())
             .build();
         let graphics_pipeline_builder = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stages)
@@ -166,7 +131,7 @@ impl SimpleRenderer {
     pub fn pipeline_layout(&self) -> vk::PipelineLayout {
         self.pipeline_layout
     }
-    pub unsafe fn destroy_simple_renderer(&mut self, device: &ash::Device) {
+    pub unsafe fn destroy_point_light_renderer(&mut self, device: &ash::Device) {
         device.destroy_pipeline(self.pipeline, None);
         device.destroy_pipeline_layout(self.pipeline_layout, None);
     }
