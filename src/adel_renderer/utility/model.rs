@@ -1,6 +1,6 @@
 use crate::adel_renderer::definitions::Vertex;
 use crate::adel_renderer::utility::{
-    buffers::AshBuffers, context::AshContext, descriptors::AshDescriptors,
+    buffer::AshBuffer, context::AshContext, descriptors::AshDescriptors,
 };
 use anyhow::Result;
 use ash::vk;
@@ -13,10 +13,8 @@ use std::path::Path;
 use tobj;
 
 pub struct ModelComponent {
-    pub vertex_buffer: vk::Buffer,
-    pub vertex_buffer_memory: vk::DeviceMemory,
-    pub index_buffer: vk::Buffer,
-    pub index_buffer_memory: vk::DeviceMemory,
+    pub vertex_buffer: AshBuffer,
+    pub index_buffer: AshBuffer,
     pub indices_count: u32,
 
     //pub uniform_buffers: Vec<vk::Buffer>,
@@ -34,10 +32,10 @@ impl ModelComponent {
 
     pub fn destroy_model_component(&mut self, device: &ash::Device) {
         unsafe {
-            device.destroy_buffer(self.vertex_buffer, None);
-            device.free_memory(self.vertex_buffer_memory, None);
-            device.destroy_buffer(self.index_buffer, None);
-            device.free_memory(self.index_buffer_memory, None);
+            device.destroy_buffer(self.vertex_buffer.buffer(), None);
+            device.free_memory(self.vertex_buffer.memory(), None);
+            device.destroy_buffer(self.index_buffer.buffer(), None);
+            device.free_memory(self.index_buffer.memory(), None);
             match self.texture_image {
                 Some(texture_image) => {
                     device.destroy_image(self.texture_image.unwrap(), None);
@@ -170,21 +168,22 @@ impl ModelComponentBuilder {
         &self,
         context: &AshContext,
         device: &ash::Device,
-        buffers: &AshBuffers,
+        command_pool: &vk::CommandPool,
+        submit_queue: vk::Queue,
     ) -> Result<ModelComponent> {
-        let (vertex_buffer, vertex_buffer_memory) = AshBuffers::create_vertex_buffer(
+        let vertex_buffer = AshBuffer::create_vertex_buffer(
             context,
             device,
             self.vertices.as_ref().unwrap(),
-            buffers.command_pool(),
-            buffers.submit_queue(),
+            command_pool,
+            submit_queue,
         )?;
-        let (index_buffer, index_buffer_memory) = AshBuffers::create_index_buffer(
+        let index_buffer = AshBuffer::create_index_buffer(
             context,
             device,
             self.indices.as_ref().unwrap(),
-            buffers.command_pool(),
-            buffers.submit_queue(),
+            command_pool,
+            submit_queue,
         )?;
 
         let texture_image;
@@ -193,23 +192,23 @@ impl ModelComponentBuilder {
         let texture_sampler;
         match &self.image_rgba {
             Some(_image_rgba) => {
-                let texture_image_tuple = AshBuffers::create_texture_image(
+                let texture_image_tuple = AshBuffer::create_texture_image(
                     context,
                     device,
                     self.image_width,
                     self.image_height,
                     self.image_size,
                     self.image_rgba.clone().unwrap(),
-                    buffers.command_pool(),
-                    buffers.submit_queue(),
+                    command_pool,
+                    submit_queue,
                 )?;
                 texture_image = Some(texture_image_tuple.0);
                 texture_image_memory = Some(texture_image_tuple.1);
-                texture_image_view = Some(AshBuffers::create_texture_image_view(
+                texture_image_view = Some(AshBuffer::create_texture_image_view(
                     device,
                     texture_image.unwrap(),
                 )?);
-                texture_sampler = Some(AshBuffers::create_texture_sample(device)?);
+                texture_sampler = Some(AshBuffer::create_texture_sample(device)?);
             }
 
             None => {
@@ -222,9 +221,7 @@ impl ModelComponentBuilder {
 
         Ok(ModelComponent {
             vertex_buffer,
-            vertex_buffer_memory,
             index_buffer,
-            index_buffer_memory,
             indices_count: self.indices.as_ref().unwrap().len() as u32,
             texture_image,
             texture_image_memory,

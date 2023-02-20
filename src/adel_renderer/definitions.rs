@@ -131,7 +131,8 @@ impl Hash for Vertex {
 #[repr(C)]
 #[derive(Debug)]
 pub struct UniformBufferObject {
-    pub projection_view: nalgebra::Matrix4<f32>,
+    pub projection: nalgebra::Matrix4<f32>,
+    pub view: nalgebra::Matrix4<f32>,
     pub ambient_light_color: nalgebra::Vector4<f32>,
     // This should be vector3 but alignment is a problem
     pub light_position: nalgebra::Vector4<f32>,

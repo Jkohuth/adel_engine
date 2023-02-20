@@ -9,8 +9,9 @@ layout(location = 0) out vec3 frag_color;
 layout(location = 1) out vec3 frag_pos_world;
 layout(location = 2) out vec3 frag_normal_world;
 
-layout(set = 0, binding = 0) uniform UniformBufferObject {
-  mat4 projection_view;
+layout(set = 0, binding = 0) uniform GlobalUbo {
+  mat4 projection;
+  mat4 view;
   vec4 ambient_light_color; // w is intensity
   vec4 light_position;      // Vec4 used for alignment
   vec4 light_color;
@@ -25,7 +26,7 @@ push;
 
 void main() {
   vec4 position_world = push.model_matrix * vec4(position, 1.0);
-  gl_Position = ubo.projection_view * position_world;
+  gl_Position = ubo.projection * ubo.view * position_world;
 
   frag_normal_world = normalize(mat3(push.normal_matrix) * normal);
   frag_pos_world = position_world.xyz;
