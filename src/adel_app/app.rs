@@ -51,6 +51,7 @@ impl Application {
         );
         systems.insert(renderer_ash.name().to_owned(), Box::new(renderer_ash));
         systems.insert(winit_window.name().to_owned(), Box::new(winit_window));
+        log::info!("Finished Creating app");
         Self {
             world,
             systems,
@@ -68,6 +69,7 @@ impl Application {
             for i in &mut self.systems.values_mut() {
                 i.as_mut().startup(&mut self.world);
             }
+            log::info!("Finished loading models");
         }
         self.event_loop.run(move |event, _, control_flow| {
             //*control_flow = ControlFlow::Wait;
@@ -111,6 +113,7 @@ impl Application {
                     // TODO: This works, for now, with a small number of systems, iterating through them 3 times per update isn't
                     // terrible (right now) just not ideal, perhaps it'd be worth storing systems in different buckets?
                     // What can I do with a HashMap<Key, Vec<Systems>>??? something to think about
+                    log::info!("Update");
                     for i in &mut self.systems.values_mut() {
                         if i.get_run_stage() == RunStage::Update {
                             i.as_mut().run(&mut self.world);
@@ -119,6 +122,7 @@ impl Application {
                 }
                 Event::RedrawRequested(_window_id) => {
                     // Redraw frame
+                    log::info!("Redraw");
                     for i in &mut self.systems.values_mut() {
                         if i.get_run_stage() == RunStage::RedrawUpdate {
                             i.as_mut().run(&mut self.world);

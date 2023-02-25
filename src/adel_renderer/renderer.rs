@@ -49,7 +49,6 @@ pub struct RendererAsh {
     point_light_renderer: PointLightRenderer,
 
     sync_objects: SyncObjects,
-    global_ubos: Vec<UniformBufferObject>,
     current_frame: usize,
     is_framebuffer_resized: bool,
     window_size: (u32, u32),
@@ -69,14 +68,12 @@ impl RendererAsh {
         let window_size = (window.inner_size().width, window.inner_size().height);
         let swapchain = AshSwapchain::new(&context, &device, window_size)?;
 
+        log::info!("Before Command Buffers");
         let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain)?;
         let (uniform_buffers, uniform_buffers_memory) =
             AshBuffer::create_uniform_buffers(&context, &device)?;
         let descriptors = AshDescriptors::new(&device, &uniform_buffers)?;
-        let mut global_ubos = Vec::new();
-        for i in 0..MAX_FRAMES_IN_FLIGHT {
-            global_ubos.push(UniformBufferObject::default());
-        }
+        log::info!("Starting simple renderer");
         let simple_renderer = SimpleRenderer::new(
             &device,
             descriptors.descriptor_set_layout(),
@@ -84,6 +81,7 @@ impl RendererAsh {
             swapchain.extent(),
         )?;
 
+        log::info!("Starting Point renderer");
         let point_light_renderer = PointLightRenderer::new(
             &device,
             descriptors.descriptor_set_layout(),
@@ -91,7 +89,7 @@ impl RendererAsh {
             swapchain.extent(),
         )?;
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
-
+        log::info!("Returning Self");
         Ok(Self {
             _entry: entry,
             context,
@@ -104,7 +102,6 @@ impl RendererAsh {
             simple_renderer,
             point_light_renderer,
             sync_objects,
-            global_ubos,
             current_frame: 0,
             is_framebuffer_resized: false,
             window_size,
@@ -439,13 +436,12 @@ impl System for RendererAsh {
             }
         }
         log::info!("Current frame {:?}", self.current_frame);
-        self.global_ubos[self.current_frame].projection = projection;
-        self.global_ubos[self.current_frame].view = view;
         AshBuffer::update_global_uniform_buffer(
             &self.device,
             &self.uniform_buffers_memory,
-            &mut self.global_ubos[self.current_frame],
             self.current_frame,
+            projection,
+            view,
             &point_lights,
         )
         .expect("Failed to update Uniform Buffers");

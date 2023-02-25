@@ -354,22 +354,28 @@ impl AshBuffer {
     pub fn update_global_uniform_buffer(
         device: &ash::Device,
         uniform_buffers_memory: &Vec<vk::DeviceMemory>,
-        ubo: &mut UniformBufferObject,
         current_frame: usize,
+        projection: nalgebra::Matrix4<f32>,
+        view: nalgebra::Matrix4<f32>,
         point_lights: &Vec<PointLightComponent>,
     ) -> Result<()> {
         let num_lights = point_lights.len() as u8;
         let mut point_lights_array: [PointLightComponent; 10] =
             [PointLightComponent::default(); 10];
+        log::info!("Point Lights {:?}", &point_lights);
         for i in point_lights.iter().enumerate() {
             point_lights_array[i.0] = *i.1;
         }
-
+        //std::process::exit(0);
         //log::info!("Point Light Array {:?}", &point_lights_array);
-        ubo.ambient_light_color = nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02);
-        ubo.point_lights = point_lights_array;
-        ubo.num_lights = num_lights;
-        let ubos = [*ubo];
+        let ambient_light_color = nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02);
+        let ubos = [UniformBufferObject {
+            projection,
+            view,
+            ambient_light_color,
+            point_lights: point_lights_array,
+            num_lights,
+        }];
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
 
         unsafe {
