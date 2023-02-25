@@ -430,6 +430,7 @@ impl System for RendererAsh {
             .expect("Failed to update point light");
         }*/
 
+        log::info!("Before Uniform buffer");
         let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
         let mut point_lights = Vec::new();
         for i in point_light_component.iter() {
@@ -437,9 +438,9 @@ impl System for RendererAsh {
                 point_lights.push(light.clone());
             }
         }
+        log::info!("Current frame {:?}", self.current_frame);
         self.global_ubos[self.current_frame].projection = projection;
         self.global_ubos[self.current_frame].view = view;
-
         AshBuffer::update_global_uniform_buffer(
             &self.device,
             &self.uniform_buffers_memory,
@@ -449,6 +450,7 @@ impl System for RendererAsh {
         )
         .expect("Failed to update Uniform Buffers");
 
+        log::info!("After uniform buffer");
         let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
         let transform_component = world.borrow_component::<TransformComponent>().unwrap();
         let models = world.borrow_component::<ModelComponent>().unwrap();

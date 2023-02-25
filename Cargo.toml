@@ -40,6 +40,6 @@ path = "bin/point_lights.rs"
 # Load Textures
 # Load models
 [[bench]]
-name = "vulkano_bench"
-path = "benches/vulkano_bench.rs"
+name = "ash_vulkan_bench"
+path = "benches/ash_vulkan_bench.rs"
 harness = false
