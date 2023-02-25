@@ -127,16 +127,66 @@ impl Hash for Vertex {
         self.uv[1].to_bits().hash(state);
     }
 }
+pub fn vec3_to_vec4(vec3: Vector3<f32>) -> Vector4<f32> {
+    Vector4::new(vec3.x, vec3.y, vec3.z, 1.0)
+}
+pub fn vec4_to_vec3(vec4: Vector4<f32>) -> Vector3<f32> {
+    Vector3::new(vec4.x, vec4.y, vec4.z)
+}
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PointLightComponent {
+    pub position: Vector4<f32>,
+    pub color: Vector4<f32>, // w is instensity
+}
+impl PointLightComponent {
+    pub fn builder() -> PointLightComponentBuilder {
+        PointLightComponentBuilder::new()
+    }
+}
+pub struct PointLightComponentBuilder {
+    position: Vector4<f32>,
+    color: Vector4<f32>,
+}
+impl PointLightComponentBuilder {
+    pub fn new() -> Self {
+        Self {
+            position: Vector4::default(),
+            color: Vector4::default(),
+        }
+    }
+    pub fn position(mut self, position: Vector4<f32>) -> Self {
+        self.position = position;
+        self
+    }
+    pub fn color(mut self, color: Vector4<f32>) -> Self {
+        self.color = color;
+        self
+    }
+    pub fn build(self) -> PointLightComponent {
+        PointLightComponent {
+            position: self.position,
+            color: self.color,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct UniformBufferObject {
     pub projection: nalgebra::Matrix4<f32>,
     pub view: nalgebra::Matrix4<f32>,
     pub ambient_light_color: nalgebra::Vector4<f32>,
-    // This should be vector3 but alignment is a problem
-    pub light_position: nalgebra::Vector4<f32>,
-    pub light_color: nalgebra::Vector4<f32>,
+    pub point_lights: [PointLightComponent; 10],
+    pub num_lights: u8, // Should not be a large number, may need to define max lights
+}
+#[repr(C)]
+#[derive(Debug)]
+pub struct PointLightPushConstants {
+    pub position: nalgebra::Vector4<f32>,
+    pub color: nalgebra::Vector4<f32>,
+    pub radius: f32,
 }
 #[repr(C)]
 #[derive(Debug)]

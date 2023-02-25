@@ -3,10 +3,12 @@ use ash::vk;
 use super::command_buffers::AshCommandBuffers;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
 use super::{context::AshContext, swapchain::AshSwapchain};
-use crate::adel_renderer::definitions::{UniformBufferObject, Vertex};
+use crate::adel_renderer::definitions::{PointLightComponent, UniformBufferObject, Vertex};
 use anyhow::{anyhow, Result};
 use image::DynamicImage;
+use nalgebra::Vector4;
 use std::path::Path;
+
 pub struct AshBuffer {
     buffer: vk::Buffer,
     buffer_memory: vk::DeviceMemory,
@@ -352,22 +354,27 @@ impl AshBuffer {
     pub fn update_global_uniform_buffer(
         device: &ash::Device,
         uniform_buffers_memory: &Vec<vk::DeviceMemory>,
-        current_image: usize,
-        projection: nalgebra::Matrix4<f32>,
-        view: nalgebra::Matrix4<f32>,
+        ubo: &mut UniformBufferObject,
+        current_frame: usize,
+        point_lights: &Vec<PointLightComponent>,
     ) -> Result<()> {
-        let ubos = [UniformBufferObject {
-            projection,
-            view,
-            ambient_light_color: nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02),
-            light_position: nalgebra::Vector4::<f32>::new(-1.0, -1.0, -1.0, 0.0),
-            light_color: nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 1.0),
-        }];
+        let num_lights = point_lights.len() as u8;
+        let mut point_lights_array: [PointLightComponent; 10] =
+            [PointLightComponent::default(); 10];
+        for i in point_lights.iter().enumerate() {
+            point_lights_array[i.0] = *i.1;
+        }
+
+        //log::info!("Point Light Array {:?}", &point_lights_array);
+        ubo.ambient_light_color = nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02);
+        ubo.point_lights = point_lights_array;
+        ubo.num_lights = num_lights;
+        let ubos = [*ubo];
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
 
         unsafe {
             let data_ptr = device.map_memory(
-                uniform_buffers_memory[current_image],
+                uniform_buffers_memory[current_frame],
                 0,
                 buffer_size,
                 vk::MemoryMapFlags::empty(),
@@ -375,7 +382,7 @@ impl AshBuffer {
 
             data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
 
-            device.unmap_memory(uniform_buffers_memory[current_image]);
+            device.unmap_memory(uniform_buffers_memory[current_frame]);
         }
 
         Ok(())
