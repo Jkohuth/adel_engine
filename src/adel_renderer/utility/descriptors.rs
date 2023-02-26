@@ -3,6 +3,7 @@ use ash::vk;
 
 use super::constants::MAX_FRAMES_IN_FLIGHT;
 use crate::adel_renderer::definitions::UniformBufferObject;
+use crate::adel_renderer::utility::buffer::AshBuffer;
 
 pub struct AshDescriptors {
     descriptor_pool: vk::DescriptorPool,
@@ -11,7 +12,7 @@ pub struct AshDescriptors {
 }
 
 impl AshDescriptors {
-    pub fn new(device: &ash::Device, uniform_buffers: &Vec<vk::Buffer>) -> Result<AshDescriptors> {
+    pub fn new(device: &ash::Device, uniform_buffers: &Vec<AshBuffer>) -> Result<AshDescriptors> {
         let descriptor_set_layout = AshDescriptors::create_descriptor_set_layout_ubo(device)?;
         //let descriptor_pool = AshDescriptors::create_descriptor_pool_ubo_sampler(&device)?;
         let descriptor_pool = AshDescriptors::create_descriptor_pool_ubo(&device)?;
@@ -81,7 +82,7 @@ impl AshDescriptors {
         device: &ash::Device,
         descriptor_pool: vk::DescriptorPool,
         descriptor_set_layout: vk::DescriptorSetLayout,
-        uniform_buffers: &Vec<vk::Buffer>,
+        uniform_buffers: &Vec<AshBuffer>,
     ) -> Result<Vec<vk::DescriptorSet>> {
         let layouts: Vec<vk::DescriptorSetLayout> =
             vec![descriptor_set_layout; MAX_FRAMES_IN_FLIGHT];
@@ -95,7 +96,7 @@ impl AshDescriptors {
             unsafe { device.allocate_descriptor_sets(&descriptor_set_allocate_info)? };
         for (i, &descriptor_set) in descriptor_sets.iter().enumerate() {
             let descriptor_buffer_info = [vk::DescriptorBufferInfo::builder()
-                .buffer(uniform_buffers[i])
+                .buffer(uniform_buffers[i].buffer())
                 // TODO: As DescriptorSets may differ when using multiple these values will need to be passed in
                 .range(std::mem::size_of::<UniformBufferObject>() as u64)
                 .offset(0)
@@ -167,7 +168,7 @@ impl AshDescriptors {
     pub fn create_descriptor_sets_uniform_self(
         &self,
         device: &ash::Device,
-        uniform_buffers: &Vec<vk::Buffer>,
+        uniform_buffers: &Vec<AshBuffer>,
     ) -> Result<Vec<vk::DescriptorSet>> {
         AshDescriptors::create_descriptor_sets_uniform(
             device,

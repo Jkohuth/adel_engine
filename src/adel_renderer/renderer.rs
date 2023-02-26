@@ -42,8 +42,8 @@ pub struct RendererAsh {
     swapchain: AshSwapchain,
 
     command_buffers: AshCommandBuffers,
-    uniform_buffers: Vec<vk::Buffer>,
-    uniform_buffers_memory: Vec<vk::DeviceMemory>,
+    uniform_buffers: Vec<AshBuffer>,
+    global_ubos: Vec<UniformBufferObject>,
     descriptors: AshDescriptors,
     simple_renderer: SimpleRenderer,
     point_light_renderer: PointLightRenderer,
@@ -70,8 +70,12 @@ impl RendererAsh {
 
         log::info!("Before Command Buffers");
         let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain)?;
-        let (uniform_buffers, uniform_buffers_memory) =
-            AshBuffer::create_uniform_buffers(&context, &device)?;
+        let uniform_buffers = AshBuffer::create_uniform_buffers(&context, &device)?;
+        let mut global_ubos = Vec::new();
+        for i in 0..MAX_FRAMES_IN_FLIGHT {
+            global_ubos.push(UniformBufferObject::default());
+        }
+        log::info!("Uniform Buffers {:?}", uniform_buffers.len());
         let descriptors = AshDescriptors::new(&device, &uniform_buffers)?;
         log::info!("Starting simple renderer");
         let simple_renderer = SimpleRenderer::new(
@@ -97,7 +101,7 @@ impl RendererAsh {
             swapchain,
             command_buffers,
             uniform_buffers,
-            uniform_buffers_memory,
+            global_ubos,
             descriptors,
             simple_renderer,
             point_light_renderer,
@@ -403,9 +407,6 @@ impl System for RendererAsh {
     fn run(&mut self, world: &mut World) {
         self.consume_events();
 
-        let camera = world.get_resource::<Camera>().unwrap();
-        let projection = camera.get_projection();
-        let view = camera.get_view();
         /*{
             let point_light_component =
                 world.borrow_component_mut::<PointLightComponent>().unwrap();
@@ -427,27 +428,6 @@ impl System for RendererAsh {
             .expect("Failed to update point light");
         }*/
 
-        log::info!("Before Uniform buffer");
-        let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
-        let mut point_lights = Vec::new();
-        for i in point_light_component.iter() {
-            if let Some(light) = i {
-                point_lights.push(light.clone());
-            }
-        }
-        log::info!("Current frame {:?}", self.current_frame);
-        AshBuffer::update_global_uniform_buffer(
-            &self.device,
-            &self.uniform_buffers_memory,
-            self.current_frame,
-            projection,
-            view,
-            &point_lights,
-        )
-        .expect("Failed to update Uniform Buffers");
-
-        log::info!("After uniform buffer");
-        let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
         let transform_component = world.borrow_component::<TransformComponent>().unwrap();
         let models = world.borrow_component::<ModelComponent>().unwrap();
         let mut model_push_vec: Vec<(&ModelComponent, PushConstantData)> = Vec::new();
@@ -464,17 +444,44 @@ impl System for RendererAsh {
                 }
             }
         }
+        let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
+        let mut point_lights = Vec::new();
         let mut point_light_vec = Vec::new();
         for i in point_light_component.iter().enumerate() {
             if let Some(light) = i.1 {
                 if let Some(transform) = &transform_component[i.0] {
+                    point_lights.push(light.clone());
                     point_light_vec.push((light.clone(), transform.clone()));
                 }
             }
         }
+        let camera = world.get_resource::<Camera>().unwrap();
+        let projection = camera.get_projection();
+        let view = camera.get_view();
+        let num_lights = point_lights.len() as u8;
+        let mut point_lights_array: [PointLightComponent; 10] =
+            [PointLightComponent::default(); 10];
+        //log::info!("Point Lights {:?}", &point_lights);
+        for i in point_lights.iter().enumerate() {
+            point_lights_array[i.0] = i.1.clone();
+        }
+        let ambient_light_color = nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02);
+        self.global_ubos[self.current_frame] = UniformBufferObject {
+            projection,
+            view,
+            ambient_light_color,
+            point_lights: point_lights_array,
+            num_lights,
+        };
         // This will work for now since the mutable reference to transformcomponent ends after the last for loop
         let (wait_fence, image_index, command_buffer) =
             self.begin_frame().expect("Failed to begin frame");
+        AshBuffer::update_global_uniform_buffer(
+            &self.device,
+            &self.uniform_buffers[self.current_frame],
+            self.global_ubos[self.current_frame],
+        )
+        .expect("Failed to update Uniform Buffers");
         self.begin_swapchain_render_pass(image_index, &command_buffer);
         self.simple_renderer
             .render(
@@ -530,10 +537,9 @@ impl Drop for RendererAsh {
             // Destroys Fences and Semaphores
             self.sync_objects
                 .cleanup_sync_objects(&self.device, MAX_FRAMES_IN_FLIGHT);
-            for i in self.uniform_buffers.iter().enumerate() {
-                self.device.destroy_buffer(self.uniform_buffers[i.0], None);
-                self.device
-                    .free_memory(self.uniform_buffers_memory[i.0], None);
+            for uniform_buffer in self.uniform_buffers.iter_mut() {
+                self.device.destroy_buffer(uniform_buffer.buffer(), None);
+                self.device.free_memory(uniform_buffer.memory(), None);
             }
             self.point_light_renderer
                 .destroy_point_light_renderer(&self.device);

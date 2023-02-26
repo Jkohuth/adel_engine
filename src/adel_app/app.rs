@@ -113,7 +113,6 @@ impl Application {
                     // TODO: This works, for now, with a small number of systems, iterating through them 3 times per update isn't
                     // terrible (right now) just not ideal, perhaps it'd be worth storing systems in different buckets?
                     // What can I do with a HashMap<Key, Vec<Systems>>??? something to think about
-                    log::info!("Update");
                     for i in &mut self.systems.values_mut() {
                         if i.get_run_stage() == RunStage::Update {
                             i.as_mut().run(&mut self.world);
@@ -122,7 +121,6 @@ impl Application {
                 }
                 Event::RedrawRequested(_window_id) => {
                     // Redraw frame
-                    log::info!("Redraw");
                     for i in &mut self.systems.values_mut() {
                         if i.get_run_stage() == RunStage::RedrawUpdate {
                             i.as_mut().run(&mut self.world);
