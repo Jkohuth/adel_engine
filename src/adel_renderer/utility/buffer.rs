@@ -227,8 +227,14 @@ impl AshBuffer {
     pub fn buffer(&self) -> vk::Buffer {
         self.buffer
     }
+    pub fn buffer_ref(&self) -> &vk::Buffer {
+        &self.buffer
+    }
     pub fn memory(&self) -> vk::DeviceMemory {
         self.buffer_memory
+    }
+    pub fn memory_ref(&self) -> &vk::DeviceMemory {
+        &self.buffer_memory
     }
     /*
         Descriptor Set Buffers
@@ -387,7 +393,7 @@ impl AshBuffer {
         let ubos = [global_ubo];
         unsafe {
             let data_ptr = device.map_memory(
-                uniform_buffer.memory(),
+                *uniform_buffer.memory_ref(),
                 0,
                 vk::WHOLE_SIZE,
                 vk::MemoryMapFlags::empty(),
@@ -395,10 +401,9 @@ impl AshBuffer {
 
             data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
 
-            device.unmap_memory(uniform_buffer.memory());
-            //uniform_buffer.flush_buffer(device)?;
+            uniform_buffer.flush_buffer(device)?;
+            device.unmap_memory(*uniform_buffer.memory_ref());
         }
-
         Ok(())
     }
     pub fn create_texture_image_view(
