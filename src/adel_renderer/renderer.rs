@@ -43,6 +43,7 @@ pub struct RendererAsh {
 
     command_buffers: AshCommandBuffers,
     uniform_buffers: Vec<AshBuffer>,
+    uniform_buffers_mapped: Vec<*mut UniformBufferObject>,
     global_ubos: Vec<UniformBufferObject>,
     descriptors: AshDescriptors,
     simple_renderer: SimpleRenderer,
@@ -70,7 +71,8 @@ impl RendererAsh {
 
         log::info!("Before Command Buffers");
         let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain)?;
-        let uniform_buffers = AshBuffer::create_uniform_buffers(&context, &device)?;
+        let (uniform_buffers, uniform_buffers_mapped) =
+            AshBuffer::create_uniform_buffers(&context, &device)?;
         let mut global_ubos = Vec::new();
         for i in 0..MAX_FRAMES_IN_FLIGHT {
             global_ubos.push(UniformBufferObject::default());
@@ -101,6 +103,7 @@ impl RendererAsh {
             swapchain,
             command_buffers,
             uniform_buffers,
+            uniform_buffers_mapped,
             global_ubos,
             descriptors,
             simple_renderer,
@@ -480,6 +483,7 @@ impl System for RendererAsh {
             &self.device,
             &self.uniform_buffers[self.current_frame],
             self.global_ubos[self.current_frame],
+            self.uniform_buffers_mapped[self.current_frame],
         )
         .expect("Failed to update Uniform Buffers");
         self.begin_swapchain_render_pass(image_index, &command_buffer);
@@ -538,6 +542,7 @@ impl Drop for RendererAsh {
             self.sync_objects
                 .cleanup_sync_objects(&self.device, MAX_FRAMES_IN_FLIGHT);
             for uniform_buffer in self.uniform_buffers.iter_mut() {
+                self.device.unmap_memory(uniform_buffer.memory());
                 self.device.destroy_buffer(uniform_buffer.buffer(), None);
                 self.device.free_memory(uniform_buffer.memory(), None);
             }

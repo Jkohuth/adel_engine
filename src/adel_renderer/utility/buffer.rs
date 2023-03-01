@@ -104,6 +104,7 @@ impl AshBuffer {
         Ok(())
     }
     pub fn flush_buffer(&self, device: &ash::Device) -> Result<()> {
+        // TODO: Pass in vk::WHOLE_SIZE or buffer size?
         let mapped_memory_range = [vk::MappedMemoryRange::builder()
             .memory(self.memory())
             .size(vk::WHOLE_SIZE)
@@ -239,9 +240,13 @@ impl AshBuffer {
     /*
         Descriptor Set Buffers
     */
-    pub fn create_uniform_buffers(context: &AshContext, device: &ash::Device) -> Result<Vec<Self>> {
+    pub fn create_uniform_buffers(
+        context: &AshContext,
+        device: &ash::Device,
+    ) -> Result<(Vec<Self>, Vec<*mut UniformBufferObject>)> {
         let instance_size = std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize;
         let mut uniform_buffers: Vec<Self> = Vec::new();
+        let mut uniform_buffers_mapped: Vec<*mut UniformBufferObject> = Vec::new();
         for _ in 0..MAX_FRAMES_IN_FLIGHT {
             let uniform_buffer = AshBuffer::create_buffer(
                 context,
@@ -251,10 +256,21 @@ impl AshBuffer {
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
                 vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             )?;
+
+            // TODO: Reorganize this Function
+            let data_ptr = unsafe {
+                device.map_memory(
+                    uniform_buffer.memory(),
+                    0,
+                    vk::WHOLE_SIZE,
+                    vk::MemoryMapFlags::empty(),
+                )?
+            } as *mut UniformBufferObject;
             uniform_buffers.push(uniform_buffer);
+            uniform_buffers_mapped.push(data_ptr);
         }
 
-        Ok(uniform_buffers)
+        Ok((uniform_buffers, uniform_buffers_mapped))
     }
 
     pub fn create_texture_image(
@@ -389,20 +405,13 @@ impl AshBuffer {
         device: &ash::Device,
         uniform_buffer: &AshBuffer,
         global_ubo: UniformBufferObject,
+        uniform_buffer_mapped: *mut UniformBufferObject,
     ) -> Result<()> {
         let ubos = [global_ubo];
         unsafe {
-            let data_ptr = device.map_memory(
-                uniform_buffer.memory(),
-                0,
-                vk::WHOLE_SIZE,
-                vk::MemoryMapFlags::empty(),
-            )? as *mut UniformBufferObject;
-
-            data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
+            uniform_buffer_mapped.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
 
             uniform_buffer.flush_buffer(device)?;
-            device.unmap_memory(uniform_buffer.memory());
         }
         Ok(())
     }
