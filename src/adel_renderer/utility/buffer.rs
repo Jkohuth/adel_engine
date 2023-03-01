@@ -393,7 +393,7 @@ impl AshBuffer {
         let ubos = [global_ubo];
         unsafe {
             let data_ptr = device.map_memory(
-                *uniform_buffer.memory_ref(),
+                uniform_buffer.memory(),
                 0,
                 vk::WHOLE_SIZE,
                 vk::MemoryMapFlags::empty(),
@@ -402,7 +402,7 @@ impl AshBuffer {
             data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
 
             uniform_buffer.flush_buffer(device)?;
-            device.unmap_memory(*uniform_buffer.memory_ref());
+            device.unmap_memory(uniform_buffer.memory());
         }
         Ok(())
     }
