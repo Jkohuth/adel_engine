@@ -7,7 +7,7 @@ use crate::{
     },
     renderer::PointLightComponent,
 };
-use std::cell::RefMut;
+use std::cell::{Ref, RefMut};
 
 use crate::adel_renderer::{vec3_to_vec4, vec4_to_vec3};
 use anyhow::Result;
@@ -37,13 +37,16 @@ impl PointLightRenderer {
             pipeline,
         })
     }
+    // TODO: Remove Mut from transform Component, its there for the update function
     pub fn render(
         &self,
         device: &ash::Device,
         command_buffer: vk::CommandBuffer,
         frame_index: usize,
         descriptors: &AshDescriptors,
-        point_lights: &Vec<(PointLightComponent, TransformComponent)>,
+        point_light_entities: &Vec<usize>,
+        point_lights: &Ref<Vec<Option<PointLightComponent>>>,
+        transforms: &RefMut<Vec<Option<TransformComponent>>>,
     ) -> Result<()> {
         //let device_size_offsets: [vk::DeviceSize; 1] = [0];
         let descriptor_sets_to_bind = [descriptors.global_descriptor_sets[frame_index]];
@@ -62,17 +65,18 @@ impl PointLightRenderer {
                 &descriptor_sets_to_bind,
                 &[],
             );
-
-            for i in point_lights.iter() {
+            for entity in point_light_entities.iter() {
+                let point_light = point_lights[*entity].unwrap();
+                let transform = transforms[*entity].unwrap();
                 let push: PointLightPushConstants = PointLightPushConstants {
                     position: Vector4::new(
-                        i.1.translation.x,
-                        i.1.translation.y,
-                        i.1.translation.z,
+                        transform.translation.x,
+                        transform.translation.y,
+                        transform.translation.z,
                         1.0,
                     ),
-                    color: i.0.color,
-                    radius: i.1.scale.x,
+                    color: point_light.color,
+                    radius: transform.scale.x,
                 };
                 device.cmd_push_constants(
                     command_buffer,
@@ -83,36 +87,45 @@ impl PointLightRenderer {
                 );
                 device.cmd_draw(command_buffer, 6, 1, 0, 0);
             }
+            for i in point_lights.iter() {}
         }
         Ok(())
     }
     pub fn update(
         dt: f32,
-        point_lights: &Vec<(PointLightComponent, usize)>,
-        transform: &mut RefMut<Vec<Option<TransformComponent>>>,
+        point_light_entities: &Vec<usize>,
+        point_lights: &Ref<Vec<Option<PointLightComponent>>>,
+        transform_component: &mut RefMut<Vec<Option<TransformComponent>>>,
         ubo: &mut UniformBufferObject,
     ) -> Result<()> {
         let axis = nalgebra::Unit::new_normalize(nalgebra::Vector3::new(0.0, -1.0, 0.0));
         let rotation = nalgebra::Matrix4::<f32>::identity()
             * nalgebra::Rotation3::from_axis_angle(&axis, 0.5 * dt).to_homogeneous();
         let mut light_index = 0;
-        for i in point_lights.iter() {
+        for entity in point_light_entities {
+            if let Some(point_light) = point_lights[*entity] {
+                if let Some(transform) = &mut transform_component[*entity] {
+                    let translation = vec3_to_vec4(transform.translation);
+                    transform.translation = vec4_to_vec3(rotation * translation);
+
+                    // copy light to ubo
+                    ubo.point_lights[light_index].position = Vector4::new(
+                        transform.translation.x,
+                        transform.translation.y,
+                        transform.translation.z,
+                        1.0,
+                    );
+                    ubo.point_lights[light_index].color = Vector4::new(
+                        point_light.color.x,
+                        point_light.color.y,
+                        point_light.color.z,
+                        1.0,
+                    );
+
+                    light_index += 1;
+                }
+            }
             // update light position
-            let transform = &mut transform[i.1].unwrap();
-            let translation = vec3_to_vec4(transform.translation);
-            transform.translation = vec4_to_vec3(rotation * translation);
-
-            // copy light to ubo
-            ubo.point_lights[light_index].position = Vector4::new(
-                transform.translation.x,
-                transform.translation.y,
-                transform.translation.z,
-                1.0,
-            );
-            ubo.point_lights[light_index].color =
-                Vector4::new(i.0.color.x, i.0.color.y, i.0.color.z, 1.0);
-
-            light_index += 1;
         }
         ubo.num_lights = light_index as u8;
         Ok(())

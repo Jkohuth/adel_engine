@@ -431,7 +431,7 @@ impl System for RendererAsh {
             .expect("Failed to update point light");
         }*/
 
-        let transform_component = world.borrow_component::<TransformComponent>().unwrap();
+        let mut transform_component = world.borrow_component_mut::<TransformComponent>().unwrap();
         let models = world.borrow_component::<ModelComponent>().unwrap();
         let mut model_push_vec: Vec<(&ModelComponent, PushConstantData)> = Vec::new();
         for i in models.iter().enumerate() {
@@ -449,22 +449,25 @@ impl System for RendererAsh {
         }
         let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
         let mut point_lights = Vec::new();
-        let mut point_light_vec = Vec::new();
+        let mut point_light_entities: Vec<usize> = Vec::new();
         for i in point_light_component.iter().enumerate() {
             if let Some(light) = i.1 {
-                if let Some(transform) = &transform_component[i.0] {
-                    point_lights.push(light.clone());
-                    point_light_vec.push((light.clone(), transform.clone()));
-                }
+                point_light_entities.push(i.0);
+                point_lights.push(light.clone());
             }
         }
+        let (wait_fence, image_index, command_buffer) =
+            self.begin_frame().expect("Failed to begin frame");
         let camera = world.get_resource::<Camera>().unwrap();
         let projection = camera.get_projection();
         let view = camera.get_view();
         let num_lights = point_lights.len() as u8;
         let mut point_lights_array: [PointLightComponent; 10] =
             [PointLightComponent::default(); 10];
-        //log::info!("Point Lights {:?}", &point_lights);
+
+        //TODO: Find a better way of doing this, every frame PointLights Array gets populated with
+        // The inital point_lights value and that gets immediately stepped on Transform Component.
+        // Perhaps I need to define a component separate than what I store that only has color
         for i in point_lights.iter().enumerate() {
             point_lights_array[i.0] = i.1.clone();
         }
@@ -476,9 +479,15 @@ impl System for RendererAsh {
             point_lights: point_lights_array,
             num_lights,
         };
+        PointLightRenderer::update(
+            world.get_dt(),
+            &point_light_entities,
+            &point_light_component,
+            &mut transform_component,
+            &mut self.global_ubos[self.current_frame],
+        )
+        .expect("Failed to update Point Lights UBO");
         // This will work for now since the mutable reference to transformcomponent ends after the last for loop
-        let (wait_fence, image_index, command_buffer) =
-            self.begin_frame().expect("Failed to begin frame");
         AshBuffer::update_global_uniform_buffer(
             &self.device,
             &self.uniform_buffers[self.current_frame],
@@ -502,7 +511,9 @@ impl System for RendererAsh {
                 command_buffer,
                 self.current_frame,
                 &self.descriptors,
-                &point_light_vec,
+                &point_light_entities,
+                &point_light_component,
+                &transform_component,
             )
             .expect("Failed to draw frame");
         self.end_swapchain_render_pass(&command_buffer);
