@@ -51,6 +51,7 @@ impl Application {
         );
         systems.insert(renderer_ash.name().to_owned(), Box::new(renderer_ash));
         systems.insert(winit_window.name().to_owned(), Box::new(winit_window));
+        log::info!("Finished Creating app");
         Self {
             world,
             systems,
@@ -68,6 +69,7 @@ impl Application {
             for i in &mut self.systems.values_mut() {
                 i.as_mut().startup(&mut self.world);
             }
+            log::info!("Finished loading models");
         }
         self.event_loop.run(move |event, _, control_flow| {
             //*control_flow = ControlFlow::Wait;
@@ -84,12 +86,15 @@ impl Application {
                     WindowEvent::CloseRequested { .. } => *control_flow = ControlFlow::Exit,
                     WindowEvent::KeyboardInput { ref input, .. } => {
                         // Special casing is bad design, but I'll leave this for now
-                        if input.virtual_keycode.unwrap() == VirtualKeyCode::Escape {
-                            *control_flow = ControlFlow::Exit;
-                        } else if let Some(mut keyboard_input) =
-                            self.world.get_resource_mut::<InputConsumer>()
-                        {
-                            keyboard_input.capture_keyboard_input(input);
+
+                        if let Some(virtual_keycode) = input.virtual_keycode {
+                            if virtual_keycode == VirtualKeyCode::Escape {
+                                *control_flow = ControlFlow::Exit;
+                            } else if let Some(mut keyboard_input) =
+                                self.world.get_resource_mut::<InputConsumer>()
+                            {
+                                keyboard_input.capture_keyboard_input(input);
+                            }
                         }
                     }
                     _ => {

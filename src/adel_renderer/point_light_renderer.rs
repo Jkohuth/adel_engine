@@ -1,7 +1,19 @@
-use crate::adel_renderer::utility::{descriptors::AshDescriptors, pipeline::AshPipeline};
+use crate::adel_tools::as_bytes;
+use crate::renderer::UniformBufferObject;
+use crate::{
+    adel_renderer::{
+        definitions::{PointLightPushConstants, TransformComponent},
+        utility::{descriptors::AshDescriptors, pipeline::AshPipeline},
+    },
+    renderer::PointLightComponent,
+};
+use std::cell::{Ref, RefMut};
+
+use crate::adel_renderer::{vec3_to_vec4, vec4_to_vec3};
 use anyhow::Result;
 use ash::vk;
 use inline_spirv::include_spirv;
+use nalgebra::Vector4;
 use std::ffi::CString;
 
 pub struct PointLightRenderer {
@@ -25,14 +37,18 @@ impl PointLightRenderer {
             pipeline,
         })
     }
+    // TODO: Remove Mut from transform Component, its there for the update function
     pub fn render(
         &self,
         device: &ash::Device,
         command_buffer: vk::CommandBuffer,
         frame_index: usize,
         descriptors: &AshDescriptors,
+        point_light_entities: &Vec<usize>,
+        point_lights: &Ref<Vec<Option<PointLightComponent>>>,
+        transforms: &RefMut<Vec<Option<TransformComponent>>>,
     ) -> Result<()> {
-        let device_size_offsets: [vk::DeviceSize; 1] = [0];
+        //let device_size_offsets: [vk::DeviceSize; 1] = [0];
         let descriptor_sets_to_bind = [descriptors.global_descriptor_sets[frame_index]];
         //let descriptor_sets = self.buffers.descriptor_sets.as_ref().unwrap();
         unsafe {
@@ -49,8 +65,69 @@ impl PointLightRenderer {
                 &descriptor_sets_to_bind,
                 &[],
             );
-            device.cmd_draw(command_buffer, 6, 1, 0, 0);
+            for entity in point_light_entities.iter() {
+                let point_light = point_lights[*entity].unwrap();
+                let transform = transforms[*entity].unwrap();
+                let push: PointLightPushConstants = PointLightPushConstants {
+                    position: Vector4::new(
+                        transform.translation.x,
+                        transform.translation.y,
+                        transform.translation.z,
+                        1.0,
+                    ),
+                    color: point_light.color,
+                    radius: transform.scale.x,
+                };
+                device.cmd_push_constants(
+                    command_buffer,
+                    self.pipeline_layout,
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    0,
+                    as_bytes(&push),
+                );
+                device.cmd_draw(command_buffer, 6, 1, 0, 0);
+            }
+            for i in point_lights.iter() {}
         }
+        Ok(())
+    }
+    pub fn update(
+        dt: f32,
+        point_light_entities: &Vec<usize>,
+        point_lights: &Ref<Vec<Option<PointLightComponent>>>,
+        transform_component: &mut RefMut<Vec<Option<TransformComponent>>>,
+        ubo: &mut UniformBufferObject,
+    ) -> Result<()> {
+        let axis = nalgebra::Unit::new_normalize(nalgebra::Vector3::new(0.0, -1.0, 0.0));
+        let rotation = nalgebra::Matrix4::<f32>::identity()
+            * nalgebra::Rotation3::from_axis_angle(&axis, 0.5 * dt).to_homogeneous();
+        let mut light_index = 0;
+        for entity in point_light_entities {
+            if let Some(point_light) = point_lights[*entity] {
+                if let Some(transform) = &mut transform_component[*entity] {
+                    let translation = vec3_to_vec4(transform.translation);
+                    transform.translation = vec4_to_vec3(rotation * translation);
+
+                    // copy light to ubo
+                    ubo.point_lights[light_index].position = Vector4::new(
+                        transform.translation.x,
+                        transform.translation.y,
+                        transform.translation.z,
+                        1.0,
+                    );
+                    ubo.point_lights[light_index].color = Vector4::new(
+                        point_light.color.x,
+                        point_light.color.y,
+                        point_light.color.z,
+                        1.0,
+                    );
+
+                    light_index += 1;
+                }
+            }
+            // update light position
+        }
+        ubo.num_lights = light_index as u8;
         Ok(())
     }
     fn create_pipeline_layout(
@@ -58,7 +135,13 @@ impl PointLightRenderer {
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> Result<vk::PipelineLayout> {
         let set_layouts = [descriptor_set_layout];
+        let push_constant_range = [vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+            .offset(0)
+            .size(std::mem::size_of::<PointLightPushConstants>() as u32)
+            .build()];
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
+            .push_constant_ranges(&push_constant_range)
             .set_layouts(&set_layouts)
             .build();
 
@@ -102,10 +185,8 @@ impl PointLightRenderer {
                 .stage(vk::ShaderStageFlags::FRAGMENT)
                 .build(),
         ];
-        let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            //    .vertex_binding_descriptions(&Vertex::binding_descriptions())
-            //    .vertex_attribute_descriptions(&Vertex::attribute_descriptions())
-            .build();
+        let vertex_input_state_create_info =
+            vk::PipelineVertexInputStateCreateInfo::builder().build();
         let graphics_pipeline_builder = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stages)
             .vertex_input_state(&vertex_input_state_create_info);

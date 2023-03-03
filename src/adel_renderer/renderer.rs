@@ -10,7 +10,7 @@ use nalgebra::{Matrix4, Vector3};
 use crate::adel_ecs::{System, World};
 use crate::adel_tools::as_bytes;
 // TODO: Create a prelude and add these to it
-use super::definitions::{PushConstantData, TransformComponent};
+use super::definitions::{PointLightComponent, PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
 use crate::adel_renderer::{
     point_light_renderer::PointLightRenderer,
@@ -27,6 +27,7 @@ use crate::adel_renderer::{
     },
 };
 
+use crate::adel_renderer::utility::constants::MAX_FRAMES_IN_FLIGHT;
 use std::sync::mpsc;
 use winit::window::Window;
 pub const NAME: &'static str = "Renderer";
@@ -41,8 +42,9 @@ pub struct RendererAsh {
     swapchain: AshSwapchain,
 
     command_buffers: AshCommandBuffers,
-    uniform_buffers: Vec<vk::Buffer>,
-    uniform_buffers_memory: Vec<vk::DeviceMemory>,
+    uniform_buffers: Vec<AshBuffer>,
+    uniform_buffers_mapped: Vec<*mut UniformBufferObject>,
+    global_ubos: Vec<UniformBufferObject>,
     descriptors: AshDescriptors,
     simple_renderer: SimpleRenderer,
     point_light_renderer: PointLightRenderer,
@@ -67,10 +69,17 @@ impl RendererAsh {
         let window_size = (window.inner_size().width, window.inner_size().height);
         let swapchain = AshSwapchain::new(&context, &device, window_size)?;
 
+        log::info!("Before Command Buffers");
         let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain)?;
-        let (uniform_buffers, uniform_buffers_memory) =
+        let (uniform_buffers, uniform_buffers_mapped) =
             AshBuffer::create_uniform_buffers(&context, &device)?;
+        let mut global_ubos = Vec::new();
+        for i in 0..MAX_FRAMES_IN_FLIGHT {
+            global_ubos.push(UniformBufferObject::default());
+        }
+        log::info!("Uniform Buffers {:?}", uniform_buffers.len());
         let descriptors = AshDescriptors::new(&device, &uniform_buffers)?;
+        log::info!("Starting simple renderer");
         let simple_renderer = SimpleRenderer::new(
             &device,
             descriptors.descriptor_set_layout(),
@@ -78,6 +87,7 @@ impl RendererAsh {
             swapchain.extent(),
         )?;
 
+        log::info!("Starting Point renderer");
         let point_light_renderer = PointLightRenderer::new(
             &device,
             descriptors.descriptor_set_layout(),
@@ -85,7 +95,7 @@ impl RendererAsh {
             swapchain.extent(),
         )?;
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
-
+        log::info!("Returning Self");
         Ok(Self {
             _entry: entry,
             context,
@@ -93,7 +103,8 @@ impl RendererAsh {
             swapchain,
             command_buffers,
             uniform_buffers,
-            uniform_buffers_memory,
+            uniform_buffers_mapped,
+            global_ubos,
             descriptors,
             simple_renderer,
             point_light_renderer,
@@ -399,24 +410,33 @@ impl System for RendererAsh {
     fn run(&mut self, world: &mut World) {
         self.consume_events();
 
-        let camera = world.get_resource::<Camera>().unwrap();
-        let projection = camera.get_projection();
-        let view = camera.get_view();
-        AshBuffer::update_global_uniform_buffer(
-            &self.device,
-            &self.uniform_buffers_memory,
-            self.current_frame,
-            projection,
-            view,
-        )
-        .expect("Failed to update Uniform Buffers");
+        /*{
+            let point_light_component =
+                world.borrow_component_mut::<PointLightComponent>().unwrap();
+            let mut transform_component =
+                world.borrow_component_mut::<TransformComponent>().unwrap();
+            let mut point_light_vec: Vec<(PointLightComponent, usize)> = Vec::new();
+            // Optimize this here although it could be ran a few different ways
+            for i in point_light_component.iter().enumerate() {
+                if let Some(light) = i.1 {
+                    point_light_vec.push((*light, i.0));
+                }
+            }
+            PointLightRenderer::update(
+                world.get_dt(),
+                &mut point_light_vec,
+                &mut transform_component,
+                &mut self.global_ubos[self.current_frame],
+            )
+            .expect("Failed to update point light");
+        }*/
 
-        let models = world.borrow_component::<ModelComponent>().unwrap();
         let mut transform_component = world.borrow_component_mut::<TransformComponent>().unwrap();
+        let models = world.borrow_component::<ModelComponent>().unwrap();
         let mut model_push_vec: Vec<(&ModelComponent, PushConstantData)> = Vec::new();
         for i in models.iter().enumerate() {
             if let Some(buffer) = i.1 {
-                if let Some(transform) = &mut transform_component[i.0] {
+                if let Some(transform) = &transform_component[i.0] {
                     let model_matrix = transform.mat4_less_computation();
                     let normal_matrix = transform.normal_matrix_mat4();
                     let push = PushConstantData {
@@ -427,9 +447,54 @@ impl System for RendererAsh {
                 }
             }
         }
-
+        let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
+        let mut point_lights = Vec::new();
+        let mut point_light_entities: Vec<usize> = Vec::new();
+        for i in point_light_component.iter().enumerate() {
+            if let Some(light) = i.1 {
+                point_light_entities.push(i.0);
+                point_lights.push(light.clone());
+            }
+        }
         let (wait_fence, image_index, command_buffer) =
             self.begin_frame().expect("Failed to begin frame");
+        let camera = world.get_resource::<Camera>().unwrap();
+        let projection = camera.get_projection();
+        let view = camera.get_view();
+        let num_lights = point_lights.len() as u8;
+        let mut point_lights_array: [PointLightComponent; 10] =
+            [PointLightComponent::default(); 10];
+
+        //TODO: Find a better way of doing this, every frame PointLights Array gets populated with
+        // The inital point_lights value and that gets immediately stepped on Transform Component.
+        // Perhaps I need to define a component separate than what I store that only has color
+        for i in point_lights.iter().enumerate() {
+            point_lights_array[i.0] = i.1.clone();
+        }
+        let ambient_light_color = nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02);
+        self.global_ubos[self.current_frame] = UniformBufferObject {
+            projection,
+            view,
+            ambient_light_color,
+            point_lights: point_lights_array,
+            num_lights,
+        };
+        PointLightRenderer::update(
+            world.get_dt(),
+            &point_light_entities,
+            &point_light_component,
+            &mut transform_component,
+            &mut self.global_ubos[self.current_frame],
+        )
+        .expect("Failed to update Point Lights UBO");
+        // This will work for now since the mutable reference to transformcomponent ends after the last for loop
+        AshBuffer::update_global_uniform_buffer(
+            &self.device,
+            &self.uniform_buffers[self.current_frame],
+            self.global_ubos[self.current_frame],
+            self.uniform_buffers_mapped[self.current_frame],
+        )
+        .expect("Failed to update Uniform Buffers");
         self.begin_swapchain_render_pass(image_index, &command_buffer);
         self.simple_renderer
             .render(
@@ -446,6 +511,9 @@ impl System for RendererAsh {
                 command_buffer,
                 self.current_frame,
                 &self.descriptors,
+                &point_light_entities,
+                &point_light_component,
+                &transform_component,
             )
             .expect("Failed to draw frame");
         self.end_swapchain_render_pass(&command_buffer);
@@ -484,10 +552,10 @@ impl Drop for RendererAsh {
             // Destroys Fences and Semaphores
             self.sync_objects
                 .cleanup_sync_objects(&self.device, MAX_FRAMES_IN_FLIGHT);
-            for i in self.uniform_buffers.iter().enumerate() {
-                self.device.destroy_buffer(self.uniform_buffers[i.0], None);
-                self.device
-                    .free_memory(self.uniform_buffers_memory[i.0], None);
+            for uniform_buffer in self.uniform_buffers.iter_mut() {
+                self.device.unmap_memory(uniform_buffer.memory());
+                self.device.destroy_buffer(uniform_buffer.buffer(), None);
+                self.device.free_memory(uniform_buffer.memory(), None);
             }
             self.point_light_renderer
                 .destroy_point_light_renderer(&self.device);

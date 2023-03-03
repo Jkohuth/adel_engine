@@ -3,13 +3,22 @@ use ash::vk;
 use super::command_buffers::AshCommandBuffers;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
 use super::{context::AshContext, swapchain::AshSwapchain};
-use crate::adel_renderer::definitions::{UniformBufferObject, Vertex};
+use crate::adel_renderer::definitions::{PointLightComponent, UniformBufferObject, Vertex};
 use anyhow::{anyhow, Result};
 use image::DynamicImage;
+use nalgebra::Vector4;
 use std::path::Path;
+
 pub struct AshBuffer {
     buffer: vk::Buffer,
     buffer_memory: vk::DeviceMemory,
+
+    buffer_size: vk::DeviceSize,
+    instance_count: u64,
+    instance_size: vk::DeviceSize,
+    alignment_size: vk::DeviceSize,
+    buffer_usage_flags: vk::BufferUsageFlags,
+    memory_property_flags: vk::MemoryPropertyFlags,
 }
 
 /*
@@ -21,13 +30,18 @@ impl AshBuffer {
     pub fn create_buffer(
         context: &AshContext,
         device: &ash::Device,
-        device_size: vk::DeviceSize,
-        usage: vk::BufferUsageFlags,
-        properties: vk::MemoryPropertyFlags,
-    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+        instance_size: vk::DeviceSize,
+        instance_count: vk::DeviceSize,
+        buffer_usage_flags: vk::BufferUsageFlags,
+        memory_property_flags: vk::MemoryPropertyFlags,
+    ) -> Result<Self> {
+        let min_offset_alignment: vk::DeviceSize = 1;
+
+        let alignment_size = get_alignment(instance_size, min_offset_alignment);
+        let buffer_size = alignment_size * instance_count;
         let buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(device_size)
-            .usage(usage)
+            .size(buffer_size)
+            .usage(buffer_usage_flags)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             //.queue_family_indices(0)
             .build();
@@ -41,7 +55,7 @@ impl AshBuffer {
         };
         let memory_type = find_memory_type(
             mem_requirements.memory_type_bits,
-            properties,
+            memory_property_flags,
             mem_properties,
         )?;
 
@@ -55,7 +69,16 @@ impl AshBuffer {
         unsafe {
             device.bind_buffer_memory(buffer, buffer_memory, 0)?;
         }
-        Ok((buffer, buffer_memory))
+        Ok(Self {
+            buffer,
+            buffer_memory,
+            buffer_size,
+            instance_count,
+            instance_size,
+            alignment_size,
+            buffer_usage_flags,
+            memory_property_flags,
+        })
     }
 
     fn copy_buffer(
@@ -80,6 +103,18 @@ impl AshBuffer {
         AshBuffer::end_single_time_commands(device, command_buffer, command_pool, submit_queue)?;
         Ok(())
     }
+    pub fn flush_buffer(&self, device: &ash::Device) -> Result<()> {
+        // TODO: Pass in vk::WHOLE_SIZE or buffer size?
+        let mapped_memory_range = [vk::MappedMemoryRange::builder()
+            .memory(self.memory())
+            .size(vk::WHOLE_SIZE)
+            .offset(0)
+            .build()];
+        unsafe {
+            device.flush_mapped_memory_ranges(&mapped_memory_range)?;
+        }
+        Ok(())
+    }
     pub fn create_vertex_buffer(
         context: &AshContext,
         device: &ash::Device,
@@ -87,52 +122,52 @@ impl AshBuffer {
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) -> Result<Self> {
-        let buffer_size = (vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;
-        let (staging_buffer, staging_buffer_memory) = AshBuffer::create_buffer(
+        let vertex_size = std::mem::size_of::<Vertex>() as vk::DeviceSize;
+        let vertex_count = vertices.len() as vk::DeviceSize;
+        let staging_buffer = AshBuffer::create_buffer(
             context,
             device,
-            buffer_size,
+            vertex_size,
+            vertex_count,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
         unsafe {
             let data_ptr = device.map_memory(
-                staging_buffer_memory,
+                staging_buffer.memory(),
                 0,
-                buffer_size,
+                staging_buffer.buffer_size,
                 vk::MemoryMapFlags::empty(),
             )? as *mut Vertex;
 
             data_ptr.copy_from_nonoverlapping(vertices.as_ptr(), vertices.len());
 
-            device.unmap_memory(staging_buffer_memory);
+            device.unmap_memory(staging_buffer.memory());
         }
-        let (vertex_buffer, vertex_buffer_memory) = AshBuffer::create_buffer(
+        let vertex_buffer = AshBuffer::create_buffer(
             context,
             device,
-            buffer_size,
+            vertex_size,
+            vertex_count,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
         AshBuffer::copy_buffer(
             device,
-            &staging_buffer,
-            &vertex_buffer,
-            buffer_size,
+            &staging_buffer.buffer(),
+            &vertex_buffer.buffer(),
+            vertex_buffer.buffer_size,
             command_pool,
             submit_queue,
         )?;
 
         unsafe {
-            device.destroy_buffer(staging_buffer, None);
-            device.free_memory(staging_buffer_memory, None);
+            device.destroy_buffer(staging_buffer.buffer(), None);
+            device.free_memory(staging_buffer.memory(), None);
         }
 
-        Ok(Self {
-            buffer: vertex_buffer,
-            buffer_memory: vertex_buffer_memory,
-        })
+        Ok(vertex_buffer)
     }
 
     pub fn create_index_buffer(
@@ -142,59 +177,65 @@ impl AshBuffer {
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) -> Result<Self> {
-        let buffer_size = (indicies.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
+        let index_size = std::mem::size_of::<u32>() as vk::DeviceSize;
+        let index_count = indicies.len() as vk::DeviceSize;
         //log::info!("JAKOB buffer 1 {:?} buffer 2 {:?}", buffer_size, buffer_size2);
-        let (staging_buffer, staging_buffer_memory) = AshBuffer::create_buffer(
+        let staging_buffer = AshBuffer::create_buffer(
             context,
             device,
-            buffer_size,
+            index_size,
+            index_count,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
         unsafe {
             let data_ptr = device.map_memory(
-                staging_buffer_memory,
+                staging_buffer.memory(),
                 0,
-                buffer_size,
+                staging_buffer.buffer_size,
                 vk::MemoryMapFlags::empty(),
             )? as *mut u32;
 
             data_ptr.copy_from_nonoverlapping(indicies.as_ptr(), indicies.len());
 
-            device.unmap_memory(staging_buffer_memory);
+            device.unmap_memory(staging_buffer.memory());
         }
-        let (index_buffer, index_buffer_memory) = AshBuffer::create_buffer(
+        let index_buffer = AshBuffer::create_buffer(
             context,
             device,
-            buffer_size,
+            index_size,
+            index_count,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
         AshBuffer::copy_buffer(
             device,
-            &staging_buffer,
-            &index_buffer,
-            buffer_size,
+            &staging_buffer.buffer(),
+            &index_buffer.buffer(),
+            index_buffer.buffer_size,
             command_pool,
             submit_queue,
         )?;
 
         unsafe {
-            device.destroy_buffer(staging_buffer, None);
-            device.free_memory(staging_buffer_memory, None);
+            device.destroy_buffer(staging_buffer.buffer(), None);
+            device.free_memory(staging_buffer.memory(), None);
         }
 
-        Ok(Self {
-            buffer: index_buffer,
-            buffer_memory: index_buffer_memory,
-        })
+        Ok(index_buffer)
     }
     pub fn buffer(&self) -> vk::Buffer {
         self.buffer
     }
+    pub fn buffer_ref(&self) -> &vk::Buffer {
+        &self.buffer
+    }
     pub fn memory(&self) -> vk::DeviceMemory {
         self.buffer_memory
+    }
+    pub fn memory_ref(&self) -> &vk::DeviceMemory {
+        &self.buffer_memory
     }
     /*
         Descriptor Set Buffers
@@ -202,24 +243,34 @@ impl AshBuffer {
     pub fn create_uniform_buffers(
         context: &AshContext,
         device: &ash::Device,
-    ) -> Result<(Vec<vk::Buffer>, Vec<vk::DeviceMemory>)> {
-        let buffer_size: vk::DeviceSize =
-            std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize;
-        let mut uniform_buffers: Vec<vk::Buffer> = Vec::new();
-        let mut uniform_buffers_memory: Vec<vk::DeviceMemory> = Vec::new();
+    ) -> Result<(Vec<Self>, Vec<*mut UniformBufferObject>)> {
+        let instance_size = std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize;
+        let mut uniform_buffers: Vec<Self> = Vec::new();
+        let mut uniform_buffers_mapped: Vec<*mut UniformBufferObject> = Vec::new();
         for _ in 0..MAX_FRAMES_IN_FLIGHT {
-            let (uniform_buffer, uniform_buffer_memory) = AshBuffer::create_buffer(
+            let uniform_buffer = AshBuffer::create_buffer(
                 context,
                 device,
-                buffer_size,
+                instance_size,
+                1,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
                 vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             )?;
+
+            // TODO: Reorganize this Function
+            let data_ptr = unsafe {
+                device.map_memory(
+                    uniform_buffer.memory(),
+                    0,
+                    vk::WHOLE_SIZE,
+                    vk::MemoryMapFlags::empty(),
+                )?
+            } as *mut UniformBufferObject;
             uniform_buffers.push(uniform_buffer);
-            uniform_buffers_memory.push(uniform_buffer_memory);
+            uniform_buffers_mapped.push(data_ptr);
         }
 
-        Ok((uniform_buffers, uniform_buffers_memory))
+        Ok((uniform_buffers, uniform_buffers_mapped))
     }
 
     pub fn create_texture_image(
@@ -232,17 +283,18 @@ impl AshBuffer {
         command_pool: &vk::CommandPool,
         submit_queue: vk::Queue,
     ) -> Result<(vk::Image, vk::DeviceMemory)> {
-        let (staging_buffer, staging_buffer_memory) = AshBuffer::create_buffer(
+        let staging_buffer = AshBuffer::create_buffer(
             context,
             device,
             image_size,
+            1,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
         )?;
         let image_data = image_data.into_raw();
         unsafe {
             let data_ptr = device.map_memory(
-                staging_buffer_memory,
+                staging_buffer.memory(),
                 0,
                 image_size,
                 vk::MemoryMapFlags::empty(),
@@ -250,7 +302,7 @@ impl AshBuffer {
 
             data_ptr.copy_from_nonoverlapping(image_data.as_ptr(), image_size as usize);
 
-            device.unmap_memory(staging_buffer_memory);
+            device.unmap_memory(staging_buffer.memory());
         }
         let (texture_image, texture_image_memory) = AshBuffer::create_image(
             context,
@@ -274,7 +326,7 @@ impl AshBuffer {
         )?;
         AshBuffer::copy_buffer_to_image(
             device,
-            staging_buffer,
+            staging_buffer.buffer(),
             texture_image,
             image_width,
             image_height,
@@ -291,8 +343,8 @@ impl AshBuffer {
             submit_queue,
         )?;
         unsafe {
-            device.destroy_buffer(staging_buffer, None);
-            device.free_memory(staging_buffer_memory, None);
+            device.destroy_buffer(staging_buffer.buffer(), None);
+            device.free_memory(staging_buffer.memory(), None);
         }
         Ok((texture_image, texture_image_memory))
     }
@@ -351,114 +403,17 @@ impl AshBuffer {
     }*/
     pub fn update_global_uniform_buffer(
         device: &ash::Device,
-        uniform_buffers_memory: &Vec<vk::DeviceMemory>,
-        current_image: usize,
-        projection: nalgebra::Matrix4<f32>,
-        view: nalgebra::Matrix4<f32>,
+        uniform_buffer: &AshBuffer,
+        global_ubo: UniformBufferObject,
+        uniform_buffer_mapped: *mut UniformBufferObject,
     ) -> Result<()> {
-        let ubos = [UniformBufferObject {
-            projection,
-            view,
-            ambient_light_color: nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02),
-            light_position: nalgebra::Vector4::<f32>::new(-1.0, -1.0, -1.0, 0.0),
-            light_color: nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 1.0),
-        }];
-        let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
-
+        let ubos = [global_ubo];
         unsafe {
-            let data_ptr = device.map_memory(
-                uniform_buffers_memory[current_image],
-                0,
-                buffer_size,
-                vk::MemoryMapFlags::empty(),
-            )? as *mut UniformBufferObject;
+            uniform_buffer_mapped.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
 
-            data_ptr.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
-
-            device.unmap_memory(uniform_buffers_memory[current_image]);
+            uniform_buffer.flush_buffer(device)?;
         }
-
         Ok(())
-    }
-    pub fn create_texture_image_bak(
-        context: &AshContext,
-        device: &ash::Device,
-        submit_queue: vk::Queue,
-        image_path: &Path,
-        command_pool: &vk::CommandPool,
-    ) -> Result<(vk::Image, vk::DeviceMemory)> {
-        let image_object: DynamicImage = image::open(image_path).unwrap();
-        //image_object = image_object.flipv();
-        let (image_width, image_height) = (image_object.width(), image_object.height());
-        // Size is u8 - per color size, 4 - rgba, width*height - area
-        let image_size =
-            (std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;
-        // This crushes 16/32 bit pixel definition to 8 bit
-        let image_data = image_object.into_rgba8().into_raw();
-
-        let (staging_buffer, staging_buffer_memory) = AshBuffer::create_buffer(
-            context,
-            device,
-            image_size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-        )?;
-
-        unsafe {
-            let data_ptr = device.map_memory(
-                staging_buffer_memory,
-                0,
-                image_size,
-                vk::MemoryMapFlags::empty(),
-            )? as *mut u8;
-
-            data_ptr.copy_from_nonoverlapping(image_data.as_ptr(), image_size as usize);
-
-            device.unmap_memory(staging_buffer_memory);
-        }
-        let (texture_image, texture_image_memory) = AshBuffer::create_image(
-            context,
-            device,
-            image_width,
-            image_height,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        )?;
-
-        AshBuffer::transition_image_layout(
-            device,
-            texture_image,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            command_pool,
-            submit_queue,
-        )?;
-        AshBuffer::copy_buffer_to_image(
-            device,
-            staging_buffer,
-            texture_image,
-            image_width,
-            image_height,
-            command_pool,
-            submit_queue,
-        )?;
-        AshBuffer::transition_image_layout(
-            device,
-            texture_image,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            command_pool,
-            submit_queue,
-        )?;
-        unsafe {
-            device.destroy_buffer(staging_buffer, None);
-            device.free_memory(staging_buffer_memory, None);
-        }
-        Ok((texture_image, texture_image_memory))
     }
     pub fn create_texture_image_view(
         device: &ash::Device,
@@ -735,4 +690,14 @@ pub fn find_memory_type(
     }
 
     Err(anyhow!("Failed to find suitable memory type!"))
+}
+// TODO: Better understand alignments
+pub fn get_alignment(
+    instance_size: vk::DeviceSize,
+    min_offset_alignment: vk::DeviceSize,
+) -> vk::DeviceSize {
+    if (min_offset_alignment > 0) {
+        return (instance_size + min_offset_alignment - 1) & !(min_offset_alignment - 1);
+    }
+    return instance_size;
 }

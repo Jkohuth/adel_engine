@@ -14,6 +14,7 @@ use tobj;
 
 pub struct ModelComponent {
     pub vertex_buffer: AshBuffer,
+    pub vertices_count: u32,
     pub index_buffer: AshBuffer,
     pub indices_count: u32,
 
@@ -221,6 +222,7 @@ impl ModelComponentBuilder {
 
         Ok(ModelComponent {
             vertex_buffer,
+            vertices_count: self.vertices.as_ref().unwrap().len() as u32,
             index_buffer,
             indices_count: self.indices.as_ref().unwrap().len() as u32,
             texture_image,

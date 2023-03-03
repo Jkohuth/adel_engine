@@ -17,6 +17,7 @@ inline-spirv = "0.1.4"
 log = "0.4"
 more-asserts = "0.3.0"
 nalgebra = "0.32.0"
+nalgebra-glm = "0.18"
 num = "0.4.0"
 simple_logger = "4.0.0"
 tobj = "3.2.3"
@@ -30,12 +31,15 @@ path = "bin/hello_world.rs"
 name = "3d_model"
 path = "bin/3d_model.rs"
 
+[[bin]]
+name = "point_lights"
+path = "bin/point_lights.rs"
 # TODO: Post Refactor add benchmark functions to test the time it takes to
 # Initiate Vulkan
 # Create Windows
 # Load Textures
 # Load models
 [[bench]]
-name = "vulkano_bench"
-path = "benches/vulkano_bench.rs"
+name = "ash_vulkan_bench"
+path = "benches/ash_vulkan_bench.rs"
 harness = false
