@@ -8,7 +8,7 @@ use crate::renderer::UniformBufferObject;
 use nalgebra::{Matrix4, Vector3};
 
 use crate::adel_ecs::{System, World};
-use crate::adel_tools::as_bytes;
+use crate::adel_tools::{print_row_ordered_matrix, print_type_of};
 // TODO: Create a prelude and add these to it
 use super::definitions::{PointLightComponent, PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
@@ -26,6 +26,7 @@ use crate::adel_renderer::{
         sync::SyncObjects,
     },
 };
+use std::ffi::c_void;
 
 use crate::adel_renderer::utility::constants::MAX_FRAMES_IN_FLIGHT;
 use std::sync::mpsc;
@@ -44,7 +45,6 @@ pub struct RendererAsh {
     command_buffers: AshCommandBuffers,
     uniform_buffers: Vec<AshBuffer>,
     uniform_buffers_mapped: Vec<*mut UniformBufferObject>,
-    global_ubos: Vec<UniformBufferObject>,
     descriptors: AshDescriptors,
     simple_renderer: SimpleRenderer,
     point_light_renderer: PointLightRenderer,
@@ -73,10 +73,6 @@ impl RendererAsh {
         let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain)?;
         let (uniform_buffers, uniform_buffers_mapped) =
             AshBuffer::create_uniform_buffers(&context, &device)?;
-        let mut global_ubos = Vec::new();
-        for i in 0..MAX_FRAMES_IN_FLIGHT {
-            global_ubos.push(UniformBufferObject::default());
-        }
         log::info!("Uniform Buffers {:?}", uniform_buffers.len());
         let descriptors = AshDescriptors::new(&device, &uniform_buffers)?;
         log::info!("Starting simple renderer");
@@ -86,7 +82,10 @@ impl RendererAsh {
             swapchain.render_pass(),
             swapchain.extent(),
         )?;
-
+        log::info!(
+            "Point Light Component {:?}",
+            std::mem::size_of::<PointLightComponent>()
+        );
         log::info!("Starting Point renderer");
         let point_light_renderer = PointLightRenderer::new(
             &device,
@@ -104,7 +103,6 @@ impl RendererAsh {
             command_buffers,
             uniform_buffers,
             uniform_buffers_mapped,
-            global_ubos,
             descriptors,
             simple_renderer,
             point_light_renderer,
@@ -229,7 +227,9 @@ impl RendererAsh {
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
         unsafe {
-            self.device.end_command_buffer(command_buffer)?;
+            self.device
+                .end_command_buffer(command_buffer)
+                .expect("Failed to end command buffer");
         }
 
         let wait_semaphores = [self.sync_objects.image_available_semaphores[self.current_frame]];
@@ -244,13 +244,17 @@ impl RendererAsh {
             .build()];
 
         unsafe {
-            self.device.reset_fences(&wait_fence)?;
+            self.device
+                .reset_fences(&wait_fence)
+                .expect("Failed to reset Fences");
 
-            self.device.queue_submit(
-                self.swapchain.graphics_queue,
-                &submit_infos,
-                self.sync_objects.inflight_fences[self.current_frame],
-            )?;
+            self.device
+                .queue_submit(
+                    self.swapchain.graphics_queue,
+                    &submit_infos,
+                    self.sync_objects.inflight_fences[self.current_frame],
+                )
+                .expect("Failed to queue_submit");
         }
 
         let swapchains = [self.swapchain.swapchain()];
@@ -447,6 +451,15 @@ impl System for RendererAsh {
                 }
             }
         }
+        /*log::info!(
+            "\nSize of Mat4 {:?}\nSize of Ubo {:?}\nMin Alignment {:?}",
+            std::mem::size_of::<nalgebra::Matrix4::<f32>>(),
+            std::mem::size_of::<UniformBufferObject>(),
+            self.context
+                .physical_device_properties
+                .limits
+                .min_uniform_buffer_offset_alignment
+        );*/
         let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
         let mut point_lights = Vec::new();
         let mut point_light_entities: Vec<usize> = Vec::new();
@@ -456,11 +469,12 @@ impl System for RendererAsh {
                 point_lights.push(light.clone());
             }
         }
-        let (wait_fence, image_index, command_buffer) =
-            self.begin_frame().expect("Failed to begin frame");
+        //log::info!("Frame begun");
         let camera = world.get_resource::<Camera>().unwrap();
         let projection = camera.get_projection();
         let view = camera.get_view();
+        let inverse_view = camera.get_inverse_view();
+
         let num_lights = point_lights.len() as u8;
         let mut point_lights_array: [PointLightComponent; 10] =
             [PointLightComponent::default(); 10];
@@ -472,30 +486,41 @@ impl System for RendererAsh {
             point_lights_array[i.0] = i.1.clone();
         }
         let ambient_light_color = nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02);
-        self.global_ubos[self.current_frame] = UniformBufferObject {
+        //print_row_ordered_matrix(&inverse_view);
+        //print_row_ordered_matrix(&view);
+        let mut ubo = UniformBufferObject {
             projection,
             view,
+            //inverse_view,
             ambient_light_color,
             point_lights: point_lights_array,
             num_lights,
         };
+        let (wait_fence, image_index, command_buffer) =
+            self.begin_frame().expect("Failed to begin frame");
+        //log::info!("Update Point Lights");
         PointLightRenderer::update(
             world.get_dt(),
             &point_light_entities,
             &point_light_component,
             &mut transform_component,
-            &mut self.global_ubos[self.current_frame],
+            &mut ubo,
         )
         .expect("Failed to update Point Lights UBO");
+        //print_type_of(&self.uniform_buffers_mapped[self.current_frame]);
+
         // This will work for now since the mutable reference to transformcomponent ends after the last for loop
+        //log::info!("Update Global Uniform Buffers");
         AshBuffer::update_global_uniform_buffer(
             &self.device,
             &self.uniform_buffers[self.current_frame],
-            self.global_ubos[self.current_frame],
+            ubo,
             self.uniform_buffers_mapped[self.current_frame],
         )
         .expect("Failed to update Uniform Buffers");
+        //log::info!("Begin Swapchain render pass");
         self.begin_swapchain_render_pass(image_index, &command_buffer);
+        //log::info!("Begin Simple Renderer System");
         self.simple_renderer
             .render(
                 &self.device,
@@ -505,6 +530,7 @@ impl System for RendererAsh {
                 &self.descriptors,
             )
             .expect("Failed to draw frame");
+        //log::info!("Begin PointLight renderer");
         self.point_light_renderer
             .render(
                 &self.device,
@@ -516,6 +542,7 @@ impl System for RendererAsh {
                 &transform_component,
             )
             .expect("Failed to draw frame");
+        //log::info!("End Swapchain render pass");
         self.end_swapchain_render_pass(&command_buffer);
         self.end_frame(image_index, wait_fence, command_buffer)
             .expect("Failed to end frame");

@@ -15,6 +15,7 @@ pub struct AshContext {
     pub instance: ash::Instance,
     pub surface_info: SurfaceInfo,
     pub physical_device: vk::PhysicalDevice,
+    pub physical_device_properties: vk::PhysicalDeviceProperties,
     pub queue_family: QueueFamilyIndices,
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
@@ -29,6 +30,14 @@ impl AshContext {
         )?;
         let surface_info = AshContext::create_surface(entry, &instance, window)?;
         let physical_device = AshContext::pick_physical_device(&instance, &surface_info)?;
+        let physical_device_properties =
+            unsafe { instance.get_physical_device_properties(physical_device) };
+        log::info!(
+            "Min Offset Alignment {:?}",
+            physical_device_properties
+                .limits
+                .min_uniform_buffer_offset_alignment
+        );
         let queue_family =
             AshContext::find_queue_family(&instance, physical_device, &surface_info)?;
         let (debug_utils_loader, debug_messenger) =
@@ -37,6 +46,7 @@ impl AshContext {
             instance,
             surface_info,
             physical_device,
+            physical_device_properties,
             queue_family,
             debug_utils_loader,
             debug_messenger,
