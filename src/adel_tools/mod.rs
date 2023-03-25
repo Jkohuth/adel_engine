@@ -17,7 +17,7 @@ pub unsafe fn as_bytes<T: Sized>(p: &T) -> &[u8] {
 pub fn print_type_of<T>(_: &T) {
     log::info!("T is of Type {:?}", std::any::type_name::<T>());
 }
-pub fn print_row_ordered_matrix(mat4: &nalgebra::Matrix4<f32>) {
+pub fn print_column_order_matrix_row_ordered(mat4: &nalgebra::Matrix4<f32>) {
     let mut mat_arr: [[f32; 4]; 4] = [[0.0; 4]; 4];
     for (position, value) in mat4.iter().enumerate() {
         let row_value = position % 4;

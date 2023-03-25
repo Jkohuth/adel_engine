@@ -69,11 +69,11 @@ pub fn populate_debug_messenger_create_info() -> vk::DebugUtilsMessengerCreateIn
         p_next: ptr::null(),
         flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
         message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
-            | vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE
+            //| vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE
             | vk::DebugUtilsMessageSeverityFlagsEXT::INFO
             | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
         message_type: vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-            | vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+            //| vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
             | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
         pfn_user_callback: Some(vulkan_debug_utils_callback),
         p_user_data: ptr::null_mut(),

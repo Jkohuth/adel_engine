@@ -8,7 +8,8 @@ use crate::renderer::UniformBufferObject;
 use nalgebra::{Matrix4, Vector3};
 
 use crate::adel_ecs::{System, World};
-use crate::adel_tools::{print_row_ordered_matrix, print_type_of};
+#[warn(unused_imports)]
+use crate::adel_tools::{print_column_order_matrix_row_ordered, print_type_of};
 // TODO: Create a prelude and add these to it
 use super::definitions::{PointLightComponent, PushConstantData, TransformComponent};
 use crate::adel_camera::Camera;
@@ -26,7 +27,6 @@ use crate::adel_renderer::{
         sync::SyncObjects,
     },
 };
-use std::ffi::c_void;
 
 use crate::adel_renderer::utility::constants::MAX_FRAMES_IN_FLIGHT;
 use std::sync::mpsc;
@@ -219,8 +219,7 @@ impl RendererAsh {
     ) -> Result<()> {
         unsafe {
             self.device
-                .end_command_buffer(command_buffer)
-                .expect("Failed to end command buffer");
+                .end_command_buffer(command_buffer)?;
         }
 
         let wait_semaphores = [self.sync_objects.image_available_semaphores[self.current_frame]];
@@ -236,16 +235,14 @@ impl RendererAsh {
 
         unsafe {
             self.device
-                .reset_fences(&wait_fence)
-                .expect("Failed to reset Fences");
+                .reset_fences(&wait_fence)?;
 
             self.device
                 .queue_submit(
                     self.swapchain.graphics_queue,
                     &submit_infos,
                     self.sync_objects.inflight_fences[self.current_frame],
-                )
-                .expect("Failed to queue_submit");
+                )?;
         }
 
         let swapchains = [self.swapchain.swapchain()];
@@ -337,8 +334,7 @@ impl RendererAsh {
     fn recreate_swapchain(&mut self) -> Result<()> {
         unsafe {
             self.device
-                .device_wait_idle()
-                .expect("Failed to wait device idle!")
+                .device_wait_idle()?;
         };
         self.destroy_swapchain_resources();
         self.context
@@ -442,15 +438,7 @@ impl System for RendererAsh {
                 }
             }
         }
-        /*log::info!(
-            "\nSize of Mat4 {:?}\nSize of Ubo {:?}\nMin Alignment {:?}",
-            std::mem::size_of::<nalgebra::Matrix4::<f32>>(),
-            std::mem::size_of::<UniformBufferObject>(),
-            self.context
-                .physical_device_properties
-                .limits
-                .min_uniform_buffer_offset_alignment
-        );*/
+
         let point_light_component = world.borrow_component::<PointLightComponent>().unwrap();
         let mut point_lights = Vec::new();
         let mut point_light_entities: Vec<usize> = Vec::new();
@@ -488,7 +476,6 @@ impl System for RendererAsh {
         };
         let (wait_fence, image_index, command_buffer) =
             self.begin_frame().expect("Failed to begin frame");
-        //log::info!("Update Point Lights");
         PointLightRenderer::update(
             world.get_dt(),
             &point_light_entities,
@@ -500,6 +487,8 @@ impl System for RendererAsh {
 
         // This will work for now since the mutable reference to transformcomponent ends after the last for loop
         // IMPORTANT: Do not update global uniform buffer until AFTER the fence has been signaled
+        // IMPORTANT: Setting the total number of UniformBuffers equal to MAX_FRAMES_IN_FLIGHT created a race condition. 
+        // Create number of uniform buffers equal to the total number of SwapChain Images to avoid reading/writing to the same memory
         AshBuffer::update_global_uniform_buffer(
             &self.device,
             &self.uniform_buffers[image_index as usize],
@@ -507,9 +496,8 @@ impl System for RendererAsh {
             self.uniform_buffers_mapped[image_index as usize],
         )
         .expect("Failed to update Uniform Buffers");
-        //log::info!("Begin Swapchain render pass");
+
         self.begin_swapchain_render_pass(image_index, &command_buffer);
-        //log::info!("Begin Simple Renderer System");
         self.simple_renderer
             .render(
                 &self.device,
@@ -519,7 +507,6 @@ impl System for RendererAsh {
                 &self.descriptors,
             )
             .expect("Failed to draw frame");
-        //log::info!("Begin PointLight renderer");
         self.point_light_renderer
             .render(
                 &self.device,
@@ -531,7 +518,6 @@ impl System for RendererAsh {
                 &transform_component,
             )
             .expect("Failed to draw frame");
-        //log::info!("End Swapchain render pass");
         self.end_swapchain_render_pass(&command_buffer);
         self.end_frame(image_index, wait_fence, command_buffer)
             .expect("Failed to end frame");

@@ -39,7 +39,6 @@ impl AshBuffer {
         min_offset_alignment: vk::DeviceSize,
     ) -> Result<Self> {
         let alignment_size = get_alignment(instance_size, min_offset_alignment);
-        //let alignment_size = instance_size;
         let buffer_size = alignment_size * instance_count;
         let buffer_create_info = vk::BufferCreateInfo::builder()
             .size(buffer_size)
@@ -116,8 +115,7 @@ impl AshBuffer {
             .build()];
         unsafe {
             device
-                .flush_mapped_memory_ranges(&mapped_memory_range)
-                .expect("Failed to flush mapped memory_range");
+                .flush_mapped_memory_ranges(&mapped_memory_range)?;
         }
         Ok(())
     }
@@ -432,8 +430,6 @@ impl AshBuffer {
     ) -> Result<()> {
         let ubos = [global_ubo];
         unsafe {
-            //let bytes = any_as_u8_slice(&ubos);
-            //uniform_buffer_mapped.write_bytes(bytes, bytes.len());
             uniform_buffer_mapped.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
             uniform_buffer.flush_buffer(device)?;
         }
