@@ -1,8 +1,7 @@
 use ash::vk;
-use bytemuck::{Pod, Zeroable};
 use std::hash::{Hash, Hasher};
 
-use nalgebra::{ArrayStorage, Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4};
+use nalgebra::{Matrix2, Matrix3, Matrix4, Vector2, Vector3, Vector4};
 
 #[derive(Default)]
 pub struct VertexBuilder {
@@ -176,7 +175,7 @@ impl PointLightComponentBuilder {
 pub struct UniformBufferObject {
     pub projection: nalgebra::Matrix4<f32>,
     pub view: nalgebra::Matrix4<f32>,
-    //pub inverse_view: nalgebra::Matrix4<f32>,
+    pub inverse_view: nalgebra::Matrix4<f32>,
     pub ambient_light_color: nalgebra::Vector4<f32>,
     pub point_lights: [PointLightComponent; 10],
     pub num_lights: u8, // Should not be a large number, may need to define max lights

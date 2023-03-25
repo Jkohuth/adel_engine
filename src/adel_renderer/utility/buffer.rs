@@ -1,5 +1,4 @@
 use ash::vk;
-use bytemuck::bytes_of;
 
 use super::command_buffers::AshCommandBuffers;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
@@ -39,8 +38,8 @@ impl AshBuffer {
         memory_property_flags: vk::MemoryPropertyFlags,
         min_offset_alignment: vk::DeviceSize,
     ) -> Result<Self> {
-        //let alignment_size = get_alignment(instance_size, min_offset_alignment);
-        let alignment_size = instance_size;
+        let alignment_size = get_alignment(instance_size, min_offset_alignment);
+        //let alignment_size = instance_size;
         let buffer_size = alignment_size * instance_count;
         let buffer_create_info = vk::BufferCreateInfo::builder()
             .size(buffer_size)
@@ -51,7 +50,6 @@ impl AshBuffer {
 
         let buffer = unsafe { device.create_buffer(&buffer_create_info, None)? };
         let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
-        log::info!("{:?}", mem_requirements);
         // This could be stored and used multiple tie
         let mem_properties = unsafe {
             context
@@ -112,7 +110,7 @@ impl AshBuffer {
         // TODO: Pass in vk::WHOLE_SIZE or buffer size?
         let mapped_memory_range = [vk::MappedMemoryRange::builder()
             .memory(self.memory())
-            // vk::WHOLE_SIZE may be used, but the buffers are aligned via minBufferAlignment
+            //.size(vk::WHOLE_SIZE) // may be used, but the buffers are aligned via minBufferAlignment
             .size(self.buffer_size)
             .offset(0)
             .build()];
@@ -258,11 +256,20 @@ impl AshBuffer {
     pub fn create_uniform_buffers(
         context: &AshContext,
         device: &ash::Device,
+        swapchain_images_count: usize,
     ) -> Result<(Vec<Self>, Vec<*mut UniformBufferObject>)> {
         let instance_size = std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize;
         let mut uniform_buffers: Vec<Self> = Vec::new();
         let mut uniform_buffers_mapped = Vec::new();
-        for _ in 0..MAX_FRAMES_IN_FLIGHT {
+
+        // Base alignment off of the the larger of the two values, which vary depending on graphics card
+        let min_offset_alignment = if context.get_min_uniform_buffer_offset_alignment() < context.get_non_coherent_atom_size() {
+            context.get_non_coherent_atom_size()
+        } else {
+            context.get_min_uniform_buffer_offset_alignment()
+        };
+        
+        for _ in 0..swapchain_images_count {
             let uniform_buffer = AshBuffer::create_buffer(
                 context,
                 device,
@@ -270,10 +277,7 @@ impl AshBuffer {
                 1,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
                 vk::MemoryPropertyFlags::HOST_VISIBLE,
-                context
-                    .physical_device_properties
-                    .limits
-                    .min_uniform_buffer_offset_alignment,
+                min_offset_alignment
             )?;
 
             // TODO: Reorganize this Function, WHOLE_SIZE could be used too

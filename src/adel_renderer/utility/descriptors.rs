@@ -102,7 +102,6 @@ impl AshDescriptors {
                 //.range(std::mem::size_of::<UniformBufferObject>() as u64)
                 .offset(0)
                 .build()];
-            log::info!("Descriptor Buffer Info {:?}", &descriptor_buffer_info);
             let ubo_write = vk::WriteDescriptorSet::builder()
                 .dst_set(descriptor_set)
                 .dst_array_element(0)

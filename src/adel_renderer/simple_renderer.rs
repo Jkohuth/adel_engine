@@ -152,7 +152,6 @@ impl SimpleRenderer {
             extent,
             graphics_pipeline_builder,
         )?;
-        log::info!("Created Model Graphics pipeline");
         unsafe {
             device.destroy_shader_module(vert_shader, None);
             device.destroy_shader_module(frag_shader, None);

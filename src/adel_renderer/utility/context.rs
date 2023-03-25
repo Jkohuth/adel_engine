@@ -32,12 +32,7 @@ impl AshContext {
         let physical_device = AshContext::pick_physical_device(&instance, &surface_info)?;
         let physical_device_properties =
             unsafe { instance.get_physical_device_properties(physical_device) };
-        log::info!(
-            "Min Offset Alignment {:?}",
-            physical_device_properties
-                .limits
-                .min_uniform_buffer_offset_alignment
-        );
+
         let queue_family =
             AshContext::find_queue_family(&instance, physical_device, &surface_info)?;
         let (debug_utils_loader, debug_messenger) =
@@ -329,6 +324,12 @@ impl AshContext {
         }
     }
 
+    pub fn get_min_uniform_buffer_offset_alignment(&self) -> u64 {
+        self.physical_device_properties.limits.min_uniform_buffer_offset_alignment
+    }
+    pub fn get_non_coherent_atom_size(&self) -> u64 {
+        self.physical_device_properties.limits.non_coherent_atom_size
+    }
     // Other structs require device to cleanup resources properly, I'm providing a cleanup function
     // here in order to properly remove it in the drop function
     pub unsafe fn destroy_context(&mut self) {

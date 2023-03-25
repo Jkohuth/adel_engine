@@ -69,24 +69,16 @@ impl RendererAsh {
         let window_size = (window.inner_size().width, window.inner_size().height);
         let swapchain = AshSwapchain::new(&context, &device, window_size)?;
 
-        log::info!("Before Command Buffers");
         let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain)?;
         let (uniform_buffers, uniform_buffers_mapped) =
-            AshBuffer::create_uniform_buffers(&context, &device)?;
-        log::info!("Uniform Buffers {:?}", uniform_buffers.len());
+            AshBuffer::create_uniform_buffers(&context, &device, swapchain.swapchain_info.swapchain_images.len())?;
         let descriptors = AshDescriptors::new(&device, &uniform_buffers)?;
-        log::info!("Starting simple renderer");
         let simple_renderer = SimpleRenderer::new(
             &device,
             descriptors.descriptor_set_layout(),
             swapchain.render_pass(),
             swapchain.extent(),
         )?;
-        log::info!(
-            "Point Light Component {:?}",
-            std::mem::size_of::<PointLightComponent>()
-        );
-        log::info!("Starting Point renderer");
         let point_light_renderer = PointLightRenderer::new(
             &device,
             descriptors.descriptor_set_layout(),
@@ -94,7 +86,6 @@ impl RendererAsh {
             swapchain.extent(),
         )?;
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
-        log::info!("Returning Self");
         Ok(Self {
             _entry: entry,
             context,
@@ -486,12 +477,11 @@ impl System for RendererAsh {
             point_lights_array[i.0] = i.1.clone();
         }
         let ambient_light_color = nalgebra::Vector4::<f32>::new(1.0, 1.0, 1.0, 0.02);
-        //print_row_ordered_matrix(&inverse_view);
-        //print_row_ordered_matrix(&view);
+
         let mut ubo = UniformBufferObject {
             projection,
             view,
-            //inverse_view,
+            inverse_view,
             ambient_light_color,
             point_lights: point_lights_array,
             num_lights,
@@ -507,15 +497,14 @@ impl System for RendererAsh {
             &mut ubo,
         )
         .expect("Failed to update Point Lights UBO");
-        //print_type_of(&self.uniform_buffers_mapped[self.current_frame]);
 
         // This will work for now since the mutable reference to transformcomponent ends after the last for loop
-        //log::info!("Update Global Uniform Buffers");
+        // IMPORTANT: Do not update global uniform buffer until AFTER the fence has been signaled
         AshBuffer::update_global_uniform_buffer(
             &self.device,
-            &self.uniform_buffers[self.current_frame],
+            &self.uniform_buffers[image_index as usize],
             ubo,
-            self.uniform_buffers_mapped[self.current_frame],
+            self.uniform_buffers_mapped[image_index as usize],
         )
         .expect("Failed to update Uniform Buffers");
         //log::info!("Begin Swapchain render pass");

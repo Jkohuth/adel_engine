@@ -22,7 +22,8 @@ num = "0.4.0"
 simple_logger = "4.0.0"
 tobj = "3.2.3"
 winit = "0.28.0"
-bytemuck = { version = "1.13.0", features = [ "derive", "extern_crate_std", "min_const_generics"] }
+winapi = "0.3.9"
+#bytemuck = { version = "1.13.0", features = [ "derive", "extern_crate_std", "min_const_generics"] }
 
 [[bin]]
 name = "hello_world"
