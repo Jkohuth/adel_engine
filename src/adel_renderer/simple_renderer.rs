@@ -109,13 +109,13 @@ impl SimpleRenderer {
     ) -> Result<vk::Pipeline> {
         // Shader Modules are unique to each Render System. They need to be generated, loaded up into pipeline builder and passed in
         let vert_spv: &'static [u32] = include_spirv!(
-            "src/adel_renderer/shaders/model_renderer.vert",
+            "src/adel_renderer/shaders/simple_shader.vert",
             vert,
             glsl,
             entry = "main"
         );
         let frag_spv: &'static [u32] = include_spirv!(
-            "src/adel_renderer/shaders/model_renderer.frag",
+            "src/adel_renderer/shaders/simple_shader.frag",
             frag,
             glsl,
             entry = "main"
@@ -152,7 +152,6 @@ impl SimpleRenderer {
             extent,
             graphics_pipeline_builder,
         )?;
-        log::info!("Created Model Graphics pipeline");
         unsafe {
             device.destroy_shader_module(vert_shader, None);
             device.destroy_shader_module(frag_shader, None);

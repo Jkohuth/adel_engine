@@ -4,9 +4,11 @@ use super::command_buffers::AshCommandBuffers;
 use super::constants::MAX_FRAMES_IN_FLIGHT;
 use super::{context::AshContext, swapchain::AshSwapchain};
 use crate::adel_renderer::definitions::{PointLightComponent, UniformBufferObject, Vertex};
+use crate::tools::any_as_u8_slice;
 use anyhow::{anyhow, Result};
 use image::DynamicImage;
 use nalgebra::Vector4;
+use std::ffi::c_void;
 use std::path::Path;
 
 pub struct AshBuffer {
@@ -34,9 +36,8 @@ impl AshBuffer {
         instance_count: vk::DeviceSize,
         buffer_usage_flags: vk::BufferUsageFlags,
         memory_property_flags: vk::MemoryPropertyFlags,
+        min_offset_alignment: vk::DeviceSize,
     ) -> Result<Self> {
-        let min_offset_alignment: vk::DeviceSize = 1;
-
         let alignment_size = get_alignment(instance_size, min_offset_alignment);
         let buffer_size = alignment_size * instance_count;
         let buffer_create_info = vk::BufferCreateInfo::builder()
@@ -48,6 +49,7 @@ impl AshBuffer {
 
         let buffer = unsafe { device.create_buffer(&buffer_create_info, None)? };
         let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
+        // This could be stored and used multiple tie
         let mem_properties = unsafe {
             context
                 .instance
@@ -107,11 +109,13 @@ impl AshBuffer {
         // TODO: Pass in vk::WHOLE_SIZE or buffer size?
         let mapped_memory_range = [vk::MappedMemoryRange::builder()
             .memory(self.memory())
-            .size(vk::WHOLE_SIZE)
+            //.size(vk::WHOLE_SIZE) // may be used, but the buffers are aligned via minBufferAlignment
+            .size(self.buffer_size)
             .offset(0)
             .build()];
         unsafe {
-            device.flush_mapped_memory_ranges(&mapped_memory_range)?;
+            device
+                .flush_mapped_memory_ranges(&mapped_memory_range)?;
         }
         Ok(())
     }
@@ -131,6 +135,7 @@ impl AshBuffer {
             vertex_count,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            1 as vk::DeviceSize,
         )?;
 
         unsafe {
@@ -152,6 +157,7 @@ impl AshBuffer {
             vertex_count,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            1 as vk::DeviceSize,
         )?;
         AshBuffer::copy_buffer(
             device,
@@ -187,6 +193,7 @@ impl AshBuffer {
             index_count,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            1 as vk::DeviceSize,
         )?;
 
         unsafe {
@@ -208,6 +215,7 @@ impl AshBuffer {
             index_count,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            1 as vk::DeviceSize,
         )?;
         AshBuffer::copy_buffer(
             device,
@@ -237,39 +245,51 @@ impl AshBuffer {
     pub fn memory_ref(&self) -> &vk::DeviceMemory {
         &self.buffer_memory
     }
+    pub fn buffer_size(&self) -> vk::DeviceSize {
+        self.buffer_size
+    }
     /*
         Descriptor Set Buffers
     */
     pub fn create_uniform_buffers(
         context: &AshContext,
         device: &ash::Device,
+        swapchain_images_count: usize,
     ) -> Result<(Vec<Self>, Vec<*mut UniformBufferObject>)> {
         let instance_size = std::mem::size_of::<UniformBufferObject>() as vk::DeviceSize;
         let mut uniform_buffers: Vec<Self> = Vec::new();
-        let mut uniform_buffers_mapped: Vec<*mut UniformBufferObject> = Vec::new();
-        for _ in 0..MAX_FRAMES_IN_FLIGHT {
+        let mut uniform_buffers_mapped = Vec::new();
+
+        // Base alignment off of the the larger of the two values, which vary depending on graphics card
+        let min_offset_alignment = if context.get_min_uniform_buffer_offset_alignment() < context.get_non_coherent_atom_size() {
+            context.get_non_coherent_atom_size()
+        } else {
+            context.get_min_uniform_buffer_offset_alignment()
+        };
+        
+        for _ in 0..swapchain_images_count {
             let uniform_buffer = AshBuffer::create_buffer(
                 context,
                 device,
                 instance_size,
                 1,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+                vk::MemoryPropertyFlags::HOST_VISIBLE,
+                min_offset_alignment
             )?;
 
-            // TODO: Reorganize this Function
+            // TODO: Reorganize this Function, WHOLE_SIZE could be used too
             let data_ptr = unsafe {
                 device.map_memory(
                     uniform_buffer.memory(),
                     0,
-                    vk::WHOLE_SIZE,
+                    uniform_buffer.buffer_size,
                     vk::MemoryMapFlags::empty(),
                 )?
             } as *mut UniformBufferObject;
             uniform_buffers.push(uniform_buffer);
             uniform_buffers_mapped.push(data_ptr);
         }
-
         Ok((uniform_buffers, uniform_buffers_mapped))
     }
 
@@ -290,6 +310,7 @@ impl AshBuffer {
             1,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+            1,
         )?;
         let image_data = image_data.into_raw();
         unsafe {
@@ -410,7 +431,6 @@ impl AshBuffer {
         let ubos = [global_ubo];
         unsafe {
             uniform_buffer_mapped.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
-
             uniform_buffer.flush_buffer(device)?;
         }
         Ok(())
@@ -696,7 +716,7 @@ pub fn get_alignment(
     instance_size: vk::DeviceSize,
     min_offset_alignment: vk::DeviceSize,
 ) -> vk::DeviceSize {
-    if (min_offset_alignment > 0) {
+    if min_offset_alignment > 0 {
         return (instance_size + min_offset_alignment - 1) & !(min_offset_alignment - 1);
     }
     return instance_size;

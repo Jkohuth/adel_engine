@@ -5,6 +5,7 @@ pub struct Camera {
     //pub position: Vector3::<f32>,
     projection_matrix: Matrix4<f32>,
     view_matrix: Matrix4<f32>,
+    inverse_view_matrix: Matrix4<f32>,
     _name: &'static str,
 }
 // NOTE: Nalgebra is Column Ordered matrix
@@ -14,6 +15,7 @@ impl Camera {
             //position: Vector3::<f32>::default(),
             projection_matrix: Matrix4::identity(),
             view_matrix: Matrix4::identity(),
+            inverse_view_matrix: Matrix4::identity(),
             _name: "camera",
         }
     }
@@ -110,6 +112,19 @@ impl Camera {
         self.view_matrix[(0, 3)] = -Vector3::dot(&u, &position);
         self.view_matrix[(1, 3)] = -Vector3::dot(&v, &position);
         self.view_matrix[(2, 3)] = -Vector3::dot(&w, &position);
+
+        self.inverse_view_matrix[(0, 0)] = u.x;
+        self.inverse_view_matrix[(1, 0)] = u.y;
+        self.inverse_view_matrix[(2, 0)] = u.z;
+        self.inverse_view_matrix[(1, 0)] = v.x;
+        self.inverse_view_matrix[(1, 1)] = v.y;
+        self.inverse_view_matrix[(1, 2)] = v.z;
+        self.inverse_view_matrix[(2, 0)] = w.x;
+        self.inverse_view_matrix[(2, 1)] = w.y;
+        self.inverse_view_matrix[(2, 2)] = w.z;
+        self.inverse_view_matrix[(0, 3)] = position.x;
+        self.inverse_view_matrix[(1, 3)] = position.y;
+        self.inverse_view_matrix[(2, 3)] = position.z;
     }
 
     pub fn set_view_target(
@@ -159,11 +174,27 @@ impl Camera {
         self.view_matrix[(0, 3)] = -Vector3::dot(&u, &position);
         self.view_matrix[(1, 3)] = -Vector3::dot(&v, &position);
         self.view_matrix[(2, 3)] = -Vector3::dot(&w, &position);
+
+        self.inverse_view_matrix[(0, 0)] = u.x;
+        self.inverse_view_matrix[(1, 0)] = u.y;
+        self.inverse_view_matrix[(2, 0)] = u.z;
+        self.inverse_view_matrix[(1, 0)] = v.x;
+        self.inverse_view_matrix[(1, 1)] = v.y;
+        self.inverse_view_matrix[(1, 2)] = v.z;
+        self.inverse_view_matrix[(2, 0)] = w.x;
+        self.inverse_view_matrix[(2, 1)] = w.y;
+        self.inverse_view_matrix[(2, 2)] = w.z;
+        self.inverse_view_matrix[(0, 3)] = position.x;
+        self.inverse_view_matrix[(1, 3)] = position.y;
+        self.inverse_view_matrix[(2, 3)] = position.z;
     }
     pub fn get_projection(&self) -> Matrix4<f32> {
         self.projection_matrix
     }
     pub fn get_view(&self) -> Matrix4<f32> {
         self.view_matrix
+    }
+    pub fn get_inverse_view(&self) -> Matrix4<f32> {
+        self.inverse_view_matrix
     }
 }

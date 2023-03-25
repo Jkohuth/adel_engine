@@ -133,9 +133,8 @@ pub fn vec3_to_vec4(vec3: Vector3<f32>) -> Vector4<f32> {
 pub fn vec4_to_vec3(vec4: Vector4<f32>) -> Vector3<f32> {
     Vector3::new(vec4.x, vec4.y, vec4.z)
 }
-
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct PointLightComponent {
     pub position: Vector4<f32>,
     pub color: Vector4<f32>, // w is instensity
@@ -171,12 +170,12 @@ impl PointLightComponentBuilder {
         }
     }
 }
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default)]
 pub struct UniformBufferObject {
     pub projection: nalgebra::Matrix4<f32>,
     pub view: nalgebra::Matrix4<f32>,
+    pub inverse_view: nalgebra::Matrix4<f32>,
     pub ambient_light_color: nalgebra::Vector4<f32>,
     pub point_lights: [PointLightComponent; 10],
     pub num_lights: u8, // Should not be a large number, may need to define max lights

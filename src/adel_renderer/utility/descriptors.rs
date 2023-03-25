@@ -33,7 +33,7 @@ impl AshDescriptors {
             .binding(0)
             .descriptor_count(1)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .stage_flags(vk::ShaderStageFlags::ALL_GRAPHICS)
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
             .build();
         let bindings = &[ubo_layout_bindings];
         let descriptor_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
@@ -98,7 +98,8 @@ impl AshDescriptors {
             let descriptor_buffer_info = [vk::DescriptorBufferInfo::builder()
                 .buffer(uniform_buffers[i].buffer())
                 // TODO: As DescriptorSets may differ when using multiple these values will need to be passed in
-                .range(std::mem::size_of::<UniformBufferObject>() as u64)
+                .range(uniform_buffers[i].buffer_size())
+                //.range(std::mem::size_of::<UniformBufferObject>() as u64)
                 .offset(0)
                 .build()];
             let ubo_write = vk::WriteDescriptorSet::builder()
