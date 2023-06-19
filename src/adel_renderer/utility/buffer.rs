@@ -283,7 +283,7 @@ impl AshBuffer {
                 device.map_memory(
                     uniform_buffer.memory(),
                     0,
-                    uniform_buffer.buffer_size,
+                    uniform_buffer.buffer_size, // or vk::WHOLE_SIZE
                     vk::MemoryMapFlags::empty(),
                 )?
             } as *mut UniformBufferObject;
@@ -430,7 +430,8 @@ impl AshBuffer {
     ) -> Result<()> {
         let ubos = [global_ubo];
         unsafe {
-            uniform_buffer_mapped.copy_from_nonoverlapping(ubos.as_ptr(), ubos.len());
+            uniform_buffer_mapped.copy_from(ubos.as_ptr(), ubos.len());
+            // This shouldn't matter as all my memory types are HOST_COHERENT
             uniform_buffer.flush_buffer(device)?;
         }
         Ok(())

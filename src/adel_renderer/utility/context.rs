@@ -69,8 +69,11 @@ impl AshContext {
             .build();
 
         let mut debug_utils_create_info = debug::populate_debug_messenger_create_info();
-
-        let extension_names = platforms::required_extension_names();
+        // Adding additional Extensions for Debugging
+        let mut extension_names = platforms::required_extension_names();
+        //let gpu_assisted_ext: CString = CString::new("VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT")?;
+        //let device_fault_ext: CString = CString::new("VK_EXT_device_fault")?;
+        //extension_names.push(device_fault_ext.as_ptr());
 
         let requred_validation_layer_raw_names: Vec<CString> = required_validation_layers
             .iter()
@@ -149,7 +152,6 @@ impl AshContext {
                     }
                 }
             });
-
         match result {
             Some(p_physical_device) => {
                 // TODO: Remove these extra calls
@@ -358,6 +360,7 @@ pub fn create_logical_device(
     let mut unique_queue_familes = HashSet::new();
     unique_queue_familes.insert(context.queue_family.graphics_family.unwrap());
     unique_queue_familes.insert(context.queue_family.present_family.unwrap());
+    log::info!("Unique Queue Familes {:?}", unique_queue_familes);
 
     let queue_priorities = [1.0_f32];
     let mut queue_create_infos = vec![];
@@ -371,6 +374,7 @@ pub fn create_logical_device(
     }
     let physical_device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
+        .robust_buffer_access(true)
         .build();
 
     let requred_validation_layer_raw_names: Vec<CString> = required_validation_layers

@@ -12,6 +12,7 @@ pub const ENGINE_VERSION: u32 = vk::make_api_version(0, 1, 0, 0);
 // TODO: Find out about API versioning here and what would work best
 pub const API_VERSION: u32 = vk::make_api_version(0, 1, 3, 0);
 
+//pub const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation", "VK_LAYER_LUNARG_api_dump"];
 pub const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 pub const ENABLE_VALIDATION_LAYERS: bool = cfg!(debug_assertions);
 

@@ -178,7 +178,8 @@ pub struct UniformBufferObject {
     pub inverse_view: nalgebra::Matrix4<f32>,
     pub ambient_light_color: nalgebra::Vector4<f32>,
     pub point_lights: [PointLightComponent; 10],
-    pub num_lights: u8, // Should not be a large number, may need to define max lights
+    // Even trailing data needs to be aligned properly, this was a u8 and it was a nightmare to debug
+    pub num_lights: u32, // Should not be a large number, may need to define max lights
 }
 #[repr(C)]
 #[derive(Debug)]

@@ -26,10 +26,12 @@ impl AshSwapchain {
         device: &ash::Device,
         window_size: (u32, u32),
     ) -> Result<Self> {
+        log::info!("Context graphics Family {:?}\tContext present Family {:?}", context.queue_family.graphics_family, context.queue_family.present_family);
         let graphics_queue =
             unsafe { device.get_device_queue(context.queue_family.graphics_family.unwrap(), 0) };
         let present_queue =
             unsafe { device.get_device_queue(context.queue_family.present_family.unwrap(), 0) };
+        log::info!("Graphics Queue {:?}\t Present Queue {:?}", graphics_queue, present_queue);
         let swapchain_info = AshSwapchain::create_swapchain(context, device, window_size)?;
         let image_views = AshSwapchain::create_swapchain_image_views(
             &device,
@@ -103,7 +105,7 @@ impl AshSwapchain {
         let available_present_mode = available_present_modes
             .iter()
             .min_by_key(|present_mode| match **present_mode {
-                // NOTE: MAILBOX present mode seems to habe an issue rendering a triangle when using Intel
+                // NOTE: MAILBOX present mode seems to have an issue rendering a triangle when using Intel
                 vk::PresentModeKHR::MAILBOX => 0,
                 vk::PresentModeKHR::FIFO => 1,
                 vk::PresentModeKHR::FIFO_RELAXED => 2,
@@ -114,7 +116,7 @@ impl AshSwapchain {
                 }
             })
             .unwrap();
-        //log::info!("Present mode: {:?}", &available_present_mode);
+        log::info!("Present mode: {:?}", &available_present_mode);
         *available_present_mode
     }
 
@@ -162,6 +164,7 @@ impl AshSwapchain {
         } else {
             image_count
         };
+        log::info!("Image Count {:?}", image_count);
 
         let (_image_sharing_mode, _queue_family_index_count, queue_family_indices) =
             if context.queue_family.graphics_family != context.queue_family.present_family {

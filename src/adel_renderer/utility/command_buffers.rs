@@ -15,6 +15,7 @@ impl AshCommandBuffers {
         context: &AshContext,
         swapchain: &AshSwapchain,
     ) -> Result<Self> {
+        log::info!("Creating Command Pool");
         let command_pool = AshCommandBuffers::create_command_pool(
             &device,
             &context.queue_family,
@@ -62,7 +63,19 @@ impl AshCommandBuffers {
             unsafe { device.allocate_command_buffers(&command_buffer_allocate_info)? };
         Ok(command_buffers)
     }
+    pub fn recreate_command_buffers(&mut self, device: &ash::Device) -> Result<()> {
+        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(self.command_pool)
+            .command_buffer_count(MAX_FRAMES_IN_FLIGHT as u32)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .build();
 
+        self.command_buffers =
+            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info)? };
+
+        Ok(())
+
+    }
     pub fn command_buffers(&self) -> &Vec<vk::CommandBuffer> {
         &self.command_buffers
     }

@@ -68,10 +68,12 @@ impl RendererAsh {
         let device = create_logical_device(&context, &VALIDATION_LAYERS.to_vec())?;
         let window_size = (window.inner_size().width, window.inner_size().height);
         let swapchain = AshSwapchain::new(&context, &device, window_size)?;
+        log::info!("Swapchain Images {:?}", swapchain.swapchain_info.swapchain_images.len());
 
         let command_buffers = AshCommandBuffers::new(&device, &context, &swapchain)?;
         let (uniform_buffers, uniform_buffers_mapped) =
             AshBuffer::create_uniform_buffers(&context, &device, swapchain.swapchain_info.swapchain_images.len())?;
+        log::info!("Unifrom Buffers {:?}", uniform_buffers.len());
         let descriptors = AshDescriptors::new(&device, &uniform_buffers)?;
         let simple_renderer = SimpleRenderer::new(
             &device,
@@ -79,6 +81,7 @@ impl RendererAsh {
             swapchain.render_pass(),
             swapchain.extent(),
         )?;
+        log::info!("Descriptor Sets {:?}", descriptors.global_descriptor_sets.len());
         let point_light_renderer = PointLightRenderer::new(
             &device,
             descriptors.descriptor_set_layout(),
@@ -86,6 +89,8 @@ impl RendererAsh {
             swapchain.extent(),
         )?;
         let sync_objects = SyncObjects::new(&device, MAX_FRAMES_IN_FLIGHT)?;
+        log::info!("Fences {:?} Image Available {:?} Render Available Fences {:?}", &sync_objects.inflight_fences.len(), sync_objects.image_available_semaphores.len(),
+         sync_objects.render_finished_semaphores.len());
         Ok(Self {
             _entry: entry,
             context,
@@ -107,17 +112,17 @@ impl RendererAsh {
         })
     }
     // Will be worth revisiting at a later time if splitting up draw_frame is desired
-    fn begin_frame(&mut self) -> Result<([vk::Fence; 1], u32, vk::CommandBuffer)> {
+    fn begin_frame(&mut self) -> Result<(u32, vk::CommandBuffer)> {
         // Wait for the fences to clear prior to beginning the next render
-        let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
+        let in_flight_fence = [self.sync_objects.inflight_fences[self.current_frame]];
 
         unsafe {
             self.device
-                .wait_for_fences(&wait_fences, true, std::u64::MAX)?;
+                .wait_for_fences(&in_flight_fence, true, std::u64::MAX)?;
         }
 
         // May need to find out where to put this
-        //assert_eq!(self.is_frame_started, false);
+        assert_eq!(self.is_frame_started, false);
         // Acquire the next image in the swapchain
         let (image_index, _is_sub_optimal) = unsafe {
             let result = self.swapchain.swapchain_loader().acquire_next_image(
@@ -130,10 +135,11 @@ impl RendererAsh {
                 Ok(image_index) => image_index,
                 Err(vk_result) => match vk_result {
                     // TODO: If getting the image index fails crash the program
-                    //vk::Result::ERROR_OUT_OF_DATE_KHR => {
-                    //    self.recreate_swapchain();
-                    //    return;
-                    //}
+                    vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                        log::error!("ERROR_OUT_OF_DATE_KHR: Recreating Swapchain");
+                        self.recreate_swapchain();
+                        return Err(anyhow!("Recreating Swapchain"));
+                    }
                     _ => return Err(anyhow!("Failed to acquire Swap Chain Image!")),
                 },
             }
@@ -148,7 +154,7 @@ impl RendererAsh {
             self.device
                 .begin_command_buffer(command_buffer, &begin_info)?;
         }
-        Ok((wait_fences, image_index, command_buffer))
+        Ok((image_index, command_buffer))
     }
     fn begin_swapchain_render_pass(
         &mut self,
@@ -214,7 +220,6 @@ impl RendererAsh {
     fn end_frame(
         &mut self,
         image_index: u32,
-        wait_fence: [vk::Fence; 1],
         command_buffer: vk::CommandBuffer,
     ) -> Result<()> {
         unsafe {
@@ -222,6 +227,7 @@ impl RendererAsh {
                 .end_command_buffer(command_buffer)?;
         }
 
+        let wait_fences = [self.sync_objects.inflight_fences[self.current_frame]];
         let wait_semaphores = [self.sync_objects.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let signal_semaphores = [self.sync_objects.render_finished_semaphores[self.current_frame]];
@@ -232,19 +238,17 @@ impl RendererAsh {
             .command_buffers(&[self.command_buffers.command_buffers[self.current_frame]])
             .signal_semaphores(&signal_semaphores)
             .build()];
-
         unsafe {
             self.device
-                .reset_fences(&wait_fence)?;
+                .reset_fences(&[self.sync_objects.inflight_fences[self.current_frame]])?;
 
             self.device
                 .queue_submit(
                     self.swapchain.graphics_queue,
                     &submit_infos,
-                    self.sync_objects.inflight_fences[self.current_frame],
+                    wait_fences[0],
                 )?;
         }
-
         let swapchains = [self.swapchain.swapchain()];
 
         let present_info = vk::PresentInfoKHR::builder()
@@ -258,7 +262,6 @@ impl RendererAsh {
                 .swapchain_loader()
                 .queue_present(self.swapchain.present_queue, &present_info)
         };
-
         let is_resized = match result {
             Ok(_) => self.is_framebuffer_resized,
             Err(vk_result) => match vk_result {
@@ -270,67 +273,10 @@ impl RendererAsh {
             self.is_framebuffer_resized = false;
             self.recreate_swapchain()?;
         }
-        // isFrameStarted = true;
+        self.is_frame_started = false;
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
         Ok(())
     }
-
-    /*
-    // TODO: Every Model should have it's own model Matrix but I'm simplifying things for now
-    pub fn draw_frame(
-        &mut self,
-        command_buffer: vk::CommandBuffer,
-        models: Vec<(&ModelComponent, PushConstantData)>,
-    ) -> Result<()> {
-        // Render Objects
-        //bind pipeline
-        let device_size_offsets: [vk::DeviceSize; 1] = [0];
-        let descriptor_sets_to_bind = [self.descriptors.global_descriptor_sets[self.current_frame]];
-        //let descriptor_sets = self.buffers.descriptor_sets.as_ref().unwrap();
-        unsafe {
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline.pipeline_layout(),
-                0,
-                &descriptor_sets_to_bind,
-                &[],
-            );
-            self.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline.graphics_pipeline(),
-            );
-            for model in models.iter() {
-                self.device.cmd_bind_vertex_buffers(
-                    command_buffer,
-                    0,
-                    &[model.0.vertex_buffer.buffer().clone()],
-                    &device_size_offsets,
-                );
-                self.device.cmd_bind_index_buffer(
-                    command_buffer,
-                    model.0.index_buffer.buffer().clone(),
-                    0,
-                    vk::IndexType::UINT32,
-                );
-                self.device.cmd_push_constants(
-                    command_buffer,
-                    self.pipeline.pipeline_layout(),
-                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    0,
-                    as_bytes(&model.1),
-                );
-
-                self.device
-                    .cmd_draw_indexed(command_buffer, model.0.indices_count, 1, 0, 0, 0);
-            }
-        }
-
-        Ok(())
-    }
-    */
-
     fn recreate_swapchain(&mut self) -> Result<()> {
         unsafe {
             self.device
@@ -346,6 +292,7 @@ impl RendererAsh {
             .recreate_depth_image(&self.context, &self.device)?;
         self.swapchain.recreate_render_pass(&self.device)?;
         self.swapchain.recreate_framebuffers(&self.device)?;
+        self.command_buffers.recreate_command_buffers(&self.device)?;
         Ok(())
         // NOTE: sync_objects may need to be recreated if the total number of frames in flight changed
     }
@@ -365,6 +312,7 @@ impl RendererAsh {
             self.swapchain.destroy_render_pass(&self.device);
             self.swapchain.destroy_frame_buffers(&self.device);
             self.swapchain.destroy_depth_data(&self.device);
+            self.command_buffers.free_command_buffers(&self.device);
         }
     }
 }
@@ -454,7 +402,7 @@ impl System for RendererAsh {
         let view = camera.get_view();
         let inverse_view = camera.get_inverse_view();
 
-        let num_lights = point_lights.len() as u8;
+        let num_lights = point_lights.len() as u32;
         let mut point_lights_array: [PointLightComponent; 10] =
             [PointLightComponent::default(); 10];
 
@@ -474,8 +422,7 @@ impl System for RendererAsh {
             point_lights: point_lights_array,
             num_lights,
         };
-        let (wait_fence, image_index, command_buffer) =
-            self.begin_frame().expect("Failed to begin frame");
+
         PointLightRenderer::update(
             world.get_dt(),
             &point_light_entities,
@@ -484,6 +431,8 @@ impl System for RendererAsh {
             &mut ubo,
         )
         .expect("Failed to update Point Lights UBO");
+        let (image_index, command_buffer) =
+            self.begin_frame().expect("Failed to begin frame");
 
         // This will work for now since the mutable reference to transformcomponent ends after the last for loop
         // IMPORTANT: Do not update global uniform buffer until AFTER the fence has been signaled
@@ -496,7 +445,6 @@ impl System for RendererAsh {
             self.uniform_buffers_mapped[image_index as usize],
         )
         .expect("Failed to update Uniform Buffers");
-
         self.begin_swapchain_render_pass(image_index, &command_buffer);
         self.simple_renderer
             .render(
@@ -519,7 +467,7 @@ impl System for RendererAsh {
             )
             .expect("Failed to draw frame");
         self.end_swapchain_render_pass(&command_buffer);
-        self.end_frame(image_index, wait_fence, command_buffer)
+        self.end_frame(image_index, command_buffer)
             .expect("Failed to end frame");
     }
     // TODO: When Uniform buffers, Textures, and Models are abstracted to components, they need to be freed here

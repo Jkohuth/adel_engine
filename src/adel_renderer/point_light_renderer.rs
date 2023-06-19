@@ -127,7 +127,7 @@ impl PointLightRenderer {
             }
             // update light position
         }
-        ubo.num_lights = light_index as u8;
+        ubo.num_lights = light_index as u32;
         Ok(())
     }
     fn create_pipeline_layout(
